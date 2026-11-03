@@ -73,24 +73,33 @@ function formatTimeSpent($seconds) {
     return "$minutes minutes $secs seconds";
 }
 
-function renderAnswerReview($questions, $answers) {
+function renderAnswerReview($questions, $answers = null) {
+    $isMasterKey = ($answers === null);
+
     $html = '<div class="answer-legend">';
     $html .= '<span class="legend-item legend-correct">Correct answer</span>';
-    $html .= '<span class="legend-item legend-user-wrong">Your incorrect choice</span>';
-    $html .= '<span class="legend-item legend-user-correct">Your correct choice</span>';
-    $html .= '<span class="legend-item legend-unanswered">Not answered</span>';
+    if (!$isMasterKey) {
+        $html .= '<span class="legend-item legend-user-wrong">Your incorrect choice</span>';
+        $html .= '<span class="legend-item legend-user-correct">Your correct choice</span>';
+        $html .= '<span class="legend-item legend-unanswered">Not answered</span>';
+    }
     $html .= '</div>';
 
     foreach ($questions as $index => $question) {
-        $userAnswer = isset($answers[$index]) ? (int)$answers[$index] : (isset($answers[(string)$index]) ? (int)$answers[(string)$index] : -1);
+        $userAnswer = (!$isMasterKey && isset($answers[$index]))
+            ? (int)$answers[$index]
+            : ((!$isMasterKey && isset($answers[(string)$index])) ? (int)$answers[(string)$index] : -1);
         $correct = (int)$question['correct'];
         $isCorrect = ($userAnswer === $correct);
-        $answered = ($userAnswer >= 0);
+        $answered = (!$isMasterKey && $userAnswer >= 0);
 
-        $html .= '<div class="review-question ' . ($isCorrect ? 'review-ok' : 'review-bad') . '">';
+        $cardClass = $isMasterKey ? 'review-ok' : ($isCorrect ? 'review-ok' : 'review-bad');
+        $html .= '<div class="review-question ' . $cardClass . '">';
         $html .= '<div class="review-question-header">';
         $html .= '<strong>Question ' . ($index + 1) . '</strong>';
-        if (!$answered) {
+        if ($isMasterKey) {
+            $html .= '<span class="review-badge correct">Answer: Option ' . ($correct + 1) . '</span>';
+        } elseif (!$answered) {
             $html .= '<span class="review-badge unanswered">Not answered</span>';
         } elseif ($isCorrect) {
             $html .= '<span class="review-badge correct">Correct</span>';
@@ -318,11 +327,11 @@ function saveQuizMapping($filename, $title, $csvFilename, $questionsCount, $pass
     return false;
 }
 
-// Function to load questions from CSV and randomize
-function loadQuestionsFromCSV($filename, $questionsToLoad = null) {
+// Function to load questions from CSV (optionally shuffle and limit)
+function loadQuestionsFromCSV($filename, $questionsToLoad = null, $shuffle = true) {
     $questions = [];
     
-    writeLog('DEBUG', "Loading questions from: $filename (limit: $questionsToLoad)");
+    writeLog('DEBUG', "Loading questions from: $filename (limit: $questionsToLoad, shuffle: " . ($shuffle ? 'yes' : 'no') . ")");
     
     if (!file_exists($filename)) {
         writeLog('ERROR', "Quiz file does not exist: $filename");
@@ -353,8 +362,10 @@ function loadQuestionsFromCSV($filename, $questionsToLoad = null) {
         writeLog('ERROR', "Failed to open quiz file: $filename");
     }
     
-    shuffle($questions);
-    writeLog('DEBUG', "Questions shuffled randomly");
+    if ($shuffle) {
+        shuffle($questions);
+        writeLog('DEBUG', "Questions shuffled randomly");
+    }
     
     if ($questionsToLoad !== null && $questionsToLoad > 0 && count($questions) > $questionsToLoad) {
         $questions = array_slice($questions, 0, $questionsToLoad);
@@ -669,6 +680,15 @@ $adminLoggedIn = isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_
 $adminReviewAttempt = null;
 if ($showAdminPanel && $adminLoggedIn && isset($_GET['review'])) {
     $adminReviewAttempt = getQuizAttemptById($_GET['review']);
+}
+$adminQuizKey = null;
+$adminQuizKeyQuestions = [];
+if ($showAdminPanel && $adminLoggedIn && isset($_GET['quiz_key'])) {
+    $quizKeyIndex = (int)$_GET['quiz_key'];
+    if (isset($availableQuizzes[$quizKeyIndex])) {
+        $adminQuizKey = $availableQuizzes[$quizKeyIndex];
+        $adminQuizKeyQuestions = loadQuestionsFromCSV($QUIZZES_FOLDER . $adminQuizKey['filename'], null, false);
+    }
 }
 $quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
 
@@ -1334,6 +1354,28 @@ $quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
                     </a>
                 </div>
 
+            <?php elseif (isset($_GET['quiz_key'])): ?>
+                <!-- Admin Master Quiz Answer Key -->
+                <?php if ($adminQuizKey): ?>
+                    <h1>📋 เฉลยข้อสอบ: <?php echo htmlspecialchars($adminQuizKey['title']); ?></h1>
+                    <p class="subtitle">
+                        File: <?php echo htmlspecialchars($adminQuizKey['filename']); ?> ·
+                        Total in CSV: <?php echo count($adminQuizKeyQuestions); ?> questions ·
+                        Loaded per test: <?php echo (int)$adminQuizKey['questions_count']; ?> ·
+                        Duration: <?php echo (int)$adminQuizKey['duration_minutes']; ?> min ·
+                        Pass: <?php echo (int)$adminQuizKey['passing_score']; ?>%
+                    </p>
+                    <?php echo renderAnswerReview($adminQuizKeyQuestions, null); ?>
+                <?php else: ?>
+                    <h1>📋 เฉลยข้อสอบ</h1>
+                    <div class="error">Quiz not found.</div>
+                <?php endif; ?>
+                <div style="margin-top: 30px;">
+                    <a href="?admin=1" style="text-decoration: none;">
+                        <button type="button" class="btn btn-secondary">← Back to Admin Dashboard</button>
+                    </a>
+                </div>
+
             <?php else: ?>
                 <!-- Admin Dashboard -->
                 <h1>⚙️ Admin Dashboard</h1>
@@ -1478,12 +1520,17 @@ $quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
                                         <td>
                                             <input form="<?php echo $formId; ?>" type="number" name="duration_minutes" id="edit_duration_<?php echo $index; ?>" value="<?php echo (int)$quiz['duration_minutes']; ?>" min="1" required style="width: 70px; padding: 8px; border: 1px solid #ddd; border-radius: 6px;">
                                         </td>
-                                        <td>
-                                            <form id="<?php echo $formId; ?>" method="POST" style="margin: 0;">
-                                                <input type="hidden" name="admin_action" value="update_quiz">
-                                                <input type="hidden" name="quiz_index" value="<?php echo $index; ?>">
-                                                <button type="submit" class="btn" style="padding: 8px 14px; font-size: 0.9em;">Save</button>
-                                            </form>
+                                        <td style="white-space: nowrap;">
+                                            <div style="display: flex; gap: 6px; align-items: center;">
+                                                <form id="<?php echo $formId; ?>" method="POST" style="margin: 0;">
+                                                    <input type="hidden" name="admin_action" value="update_quiz">
+                                                    <input type="hidden" name="quiz_index" value="<?php echo $index; ?>">
+                                                    <button type="submit" class="btn btn-sm">Save</button>
+                                                </form>
+                                                <a href="?admin=1&quiz_key=<?php echo $index; ?>" style="text-decoration: none;">
+                                                    <button type="button" class="btn btn-secondary btn-sm">เฉลย</button>
+                                                </a>
+                                            </div>
                                         </td>
                                     </tr>
                                 <?php endforeach; ?>
