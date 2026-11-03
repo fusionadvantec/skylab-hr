@@ -1,18 +1,12 @@
 <?php
 
-use PHPMailer\PHPMailer\PHPMailer;
-use PHPMailer\PHPMailer\Exception;
-
-require 'vendor/autoload.php';
-
-$mail = new PHPMailer(true);
-
 session_start();
 
 // Configuration
 $ADMIN_EMAIL = "Quiztest@fusion.co.th";
 $QUIZ_MAPPING_FILE = "quiz_mapping.csv";
 $QUIZZES_FOLDER = "quizzes/";
+$RESULTS_FILE = "quiz_results.json";
 $SECONDS_PER_QUESTION = 60; // default: 1 minute per quiz item
 $ADMIN_PASSWORD = "IloveFusion@1234";
 $DEFAULT_QUESTIONS_TO_LOAD = 10;
@@ -35,6 +29,135 @@ function writeLog($level, $message) {
         $localLog = __DIR__ . "/quiz_local.log";
         @file_put_contents($localLog, $logMessage, FILE_APPEND);
     }
+}
+
+function loadQuizAttempts() {
+    global $RESULTS_FILE;
+    if (!file_exists($RESULTS_FILE)) {
+        return [];
+    }
+    $raw = @file_get_contents($RESULTS_FILE);
+    $data = $raw ? json_decode($raw, true) : [];
+    return is_array($data) ? $data : [];
+}
+
+function saveQuizAttempt($attempt) {
+    global $RESULTS_FILE;
+    $attempts = loadQuizAttempts();
+    array_unshift($attempts, $attempt);
+    $ok = @file_put_contents(
+        $RESULTS_FILE,
+        json_encode($attempts, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)
+    );
+    if ($ok === false) {
+        writeLog('ERROR', "Failed to save quiz attempt to $RESULTS_FILE");
+        return false;
+    }
+    writeLog('INFO', "Saved quiz attempt {$attempt['id']} for {$attempt['user_email']}");
+    return true;
+}
+
+function getQuizAttemptById($id) {
+    foreach (loadQuizAttempts() as $attempt) {
+        if (($attempt['id'] ?? '') === $id) {
+            return $attempt;
+        }
+    }
+    return null;
+}
+
+function formatTimeSpent($seconds) {
+    $seconds = max(0, (int)$seconds);
+    $minutes = floor($seconds / 60);
+    $secs = $seconds % 60;
+    return "$minutes minutes $secs seconds";
+}
+
+function renderAnswerReview($questions, $answers) {
+    $html = '<div class="answer-legend">';
+    $html .= '<span class="legend-item legend-correct">Correct answer</span>';
+    $html .= '<span class="legend-item legend-user-wrong">Your incorrect choice</span>';
+    $html .= '<span class="legend-item legend-user-correct">Your correct choice</span>';
+    $html .= '<span class="legend-item legend-unanswered">Not answered</span>';
+    $html .= '</div>';
+
+    foreach ($questions as $index => $question) {
+        $userAnswer = isset($answers[$index]) ? (int)$answers[$index] : (isset($answers[(string)$index]) ? (int)$answers[(string)$index] : -1);
+        $correct = (int)$question['correct'];
+        $isCorrect = ($userAnswer === $correct);
+        $answered = ($userAnswer >= 0);
+
+        $html .= '<div class="review-question ' . ($isCorrect ? 'review-ok' : 'review-bad') . '">';
+        $html .= '<div class="review-question-header">';
+        $html .= '<strong>Question ' . ($index + 1) . '</strong>';
+        if (!$answered) {
+            $html .= '<span class="review-badge unanswered">Not answered</span>';
+        } elseif ($isCorrect) {
+            $html .= '<span class="review-badge correct">Correct</span>';
+        } else {
+            $html .= '<span class="review-badge wrong">Incorrect</span>';
+        }
+        $html .= '</div>';
+        $html .= '<div class="question-text">' . htmlspecialchars($question['question']) . '</div>';
+
+        foreach ($question['options'] as $optIndex => $option) {
+            $classes = ['review-option'];
+            $labels = [];
+
+            if ($optIndex === $correct) {
+                $classes[] = 'is-correct';
+                $labels[] = 'Correct answer';
+            }
+            if ($answered && $optIndex === $userAnswer) {
+                if ($optIndex === $correct) {
+                    $classes[] = 'is-user-correct';
+                    $labels[] = 'Your answer';
+                } else {
+                    $classes[] = 'is-user-wrong';
+                    $labels[] = 'Your answer';
+                }
+            }
+
+            $html .= '<div class="' . implode(' ', $classes) . '">';
+            $html .= '<span class="review-option-text">' . htmlspecialchars($option) . '</span>';
+            if (!empty($labels)) {
+                $html .= '<span class="review-option-tags">' . htmlspecialchars(implode(' · ', array_unique($labels))) . '</span>';
+            }
+            $html .= '</div>';
+        }
+
+        $html .= '</div>';
+    }
+
+    return $html;
+}
+
+function renderResultsSummaryCard($results) {
+    $passed = !empty($results['passed']);
+    $html = '<div class="results-card">';
+    $html .= '<div class="success-icon">' . ($passed ? '🎉' : '📚') . '</div>';
+    $html .= '<h1>' . ($passed ? 'Congratulations!' : 'Keep Learning!') . '</h1>';
+    $html .= '<h2 style="text-align: center; color: #666; margin-bottom: 20px;">' . htmlspecialchars($results['quiz_title']) . '</h2>';
+    $html .= '<div class="status-badge ' . ($passed ? 'status-passed' : 'status-failed') . '">';
+    $html .= htmlspecialchars($results['status']) . ' ' . ($passed ? '✓' : '✗');
+    $html .= '</div>';
+    $html .= '<div class="score-display">' . (int)$results['score'] . '/' . (int)$results['total'] . '</div>';
+    $html .= '<div class="result-info">';
+    $html .= '<p><strong>Percentage:</strong> ' . htmlspecialchars((string)$results['percentage']) . '%</p>';
+    $html .= '<p><strong>Passing Score Required:</strong> ' . (int)$results['passing_score'] . '%</p>';
+    $html .= '<p><strong>Time Spent:</strong> ' . htmlspecialchars($results['time_spent']) . '</p>';
+    if (!empty($results['timed_out'])) {
+        $html .= '<p><strong>Note:</strong> Quiz ended because time ran out.</p>';
+    }
+    if (!empty($results['user_name'])) {
+        $html .= '<p><strong>Candidate:</strong> ' . htmlspecialchars($results['user_name']);
+        if (!empty($results['user_email'])) {
+            $html .= ' (' . htmlspecialchars($results['user_email']) . ')';
+        }
+        $html .= '</p>';
+    }
+    $html .= '</div></div>';
+    return $html;
 }
 
 // Create quizzes folder if it doesn't exist
@@ -475,94 +598,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
         
         $score = 0;
         $total = count($questions);
+        $normalizedAnswers = [];
         
         foreach ($questions as $index => $question) {
-            $userAnswer = isset($_SESSION['quiz_answers'][$index]) ? $_SESSION['quiz_answers'][$index] : -1;
-            if ($userAnswer === $question['correct']) {
+            $userAnswer = isset($_SESSION['quiz_answers'][$index]) ? (int)$_SESSION['quiz_answers'][$index] : -1;
+            $normalizedAnswers[$index] = $userAnswer;
+            if ($userAnswer === (int)$question['correct']) {
                 $score++;
             }
         }
         
-        $percentage = round(($score / $total) * 100, 2);
-        $timeSpent = time() - $_SESSION['start_time'];
-        $minutes = floor($timeSpent / 60);
-        $seconds = $timeSpent % 60;
-        
-        // Determine pass/fail based on quiz passing score
-        $passingScore = $selectedQuiz['passing_score'];
+        $percentage = $total > 0 ? round(($score / $total) * 100, 2) : 0;
+        $timeSpentSeconds = time() - (int)$_SESSION['start_time'];
+        $passingScore = (int)$selectedQuiz['passing_score'];
         $passed = $percentage >= $passingScore;
         $status = $passed ? "PASSED" : "FAILED";
+        $userEmail = $_SESSION['user_email'] ?? '';
+        $userName = $_SESSION['user_name'] ?? '';
         
-        $_SESSION['quiz_results'] = [
+        $attempt = [
+            'id' => uniqid('attempt_', true),
+            'completed_at' => date('Y-m-d H:i:s'),
+            'user_name' => $userName,
+            'user_email' => $userEmail,
+            'quiz_title' => $selectedQuiz['title'],
             'score' => $score,
             'total' => $total,
             'percentage' => $percentage,
-            'time_spent' => "$minutes minutes $seconds seconds",
-            'answers' => $_SESSION['quiz_answers'],
-            'quiz_title' => $selectedQuiz['title'],
-            'passed' => $passed,
             'passing_score' => $passingScore,
-            'status' => $status
+            'passed' => $passed,
+            'status' => $status,
+            'time_spent_seconds' => $timeSpentSeconds,
+            'time_spent' => formatTimeSpent($timeSpentSeconds),
+            'timed_out' => !empty($timeExpired),
+            'answers' => $normalizedAnswers,
+            'questions' => $questions
         ];
         
-        $userEmail = $_SESSION['user_email'];
-        $userName = $_SESSION['user_name'];
-        writeLog('INFO', "Quiz completed by $userName ($userEmail): Score=$score/$total ($percentage%), Status=$status, Time={$minutes}m{$seconds}s");
+        saveQuizAttempt($attempt);
+        $_SESSION['quiz_results'] = $attempt;
         
-        $quizTitle = $selectedQuiz['title'];
-        $subject = "Your $quizTitle Results - $status";
-	// --OPPO email
-	//
-    // SMTP settings
-    $GMAIL_EMAIL = "kcommerce@gmail.com";
-    $mail->isSMTP();
-    $mail->Host       = 'smtp.gmail.com';
-    $mail->SMTPAuth   = true;
-    $mail->Username   = $GMAIL_EMAIL; // Your Gmail address
-    $mail->Password   = 'lgjp drlv rvjq smjv';    // App Password from Google
-    $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS; // or 'tls'
-    $mail->Port       = 587;
-
-	//
-        // Create email message
-        $message = "Hello $userName,\n\n";
-        $message .= "Thank you for taking the $quizTitle!\n\n";
-        $message .= "=== YOUR RESULTS ===\n";
-        $message .= "Score: $score out of $total ($percentage%)\n";
-        $message .= "Passing Score Required: $passingScore%\n";
-        $message .= "Status: $status " . ($passed ? "✓" : "✗") . "\n";
-        $message .= "Time Spent: $minutes minutes $seconds seconds\n\n";
-        
-        if ($passed) {
-            $message .= "Congratulations! You have successfully passed the quiz.\n\n";
-        } else {
-            $message .= "Unfortunately, you did not meet the passing score. Please review the material and try again.\n\n";
-        }
-        
-        $message .= "Keep learning!\n\n";
-        $message .= "Best regards,\nQuiz Team";
-        
-        $headers = "From: $GMAIL_EMAIL\r\n";
-        $headers .= "Cc: $ADMIN_EMAIL\r\n";
-        $headers .= "Reply-To: $GMAIL_EMAIL\r\n";
-        $headers .= "X-Mailer: PHP/" . phpversion();
-	try {
-       	$mail->send();
-            writeLog('INFO', "Results email sent to: $userEmail (CC: $ADMIN_EMAIL)");
-
-	} catch (Exception $e)
-	{
-            writeLog('ERROR', "Failed to send results email to: $userEmail");
-            writeLog('ERROR', "Mailer Error: $mail->ErrorInfo");
-
-	}
-	/*
-        if (mail($userEmail, $subject, $message, $headers)) {
-            writeLog('INFO', "Results email sent to: $userEmail (CC: $ADMIN_EMAIL)");
-        } else {
-            writeLog('ERROR', "Failed to send results email to: $userEmail");
-	}
-*/
+        writeLog('INFO', "Quiz completed by $userName ($userEmail): Score=$score/$total ($percentage%), Status=$status, Time={$attempt['time_spent']}");
         
         header('Location: ' . $_SERVER['PHP_SELF'] . '?results=1');
         exit;
@@ -589,6 +665,12 @@ $showResults = isset($_GET['results']) && isset($_SESSION['quiz_results']);
 $currentQuestionIndex = isset($_SESSION['current_question']) ? $_SESSION['current_question'] : 0;
 $currentQuestion = isset($questions[$currentQuestionIndex]) ? $questions[$currentQuestionIndex] : null;
 $showAdminPanel = isset($_GET['admin']);
+$adminLoggedIn = isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'];
+$adminReviewAttempt = null;
+if ($showAdminPanel && $adminLoggedIn && isset($_GET['review'])) {
+    $adminReviewAttempt = getQuizAttemptById($_GET['review']);
+}
+$quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
 
 ?>
 <!DOCTYPE html>
@@ -754,6 +836,102 @@ $showAdminPanel = isset($_GET['admin']);
 
         .btn-success:hover {
             background: #218838;
+        }
+
+        .btn-sm {
+            width: auto;
+            display: inline-block;
+            padding: 8px 14px;
+            font-size: 0.9em;
+        }
+
+        .answer-legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin: 20px 0;
+        }
+
+        .legend-item {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 999px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+
+        .legend-correct { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .legend-user-wrong { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .legend-user-correct { background: #cce5ff; color: #004085; border: 1px solid #b8daff; }
+        .legend-unanswered { background: #e2e3e5; color: #383d41; border: 1px solid #d6d8db; }
+
+        .review-question {
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 18px;
+            margin-bottom: 16px;
+        }
+
+        .review-question.review-ok { border-left: 5px solid #28a745; }
+        .review-question.review-bad { border-left: 5px solid #dc3545; }
+
+        .review-question-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .review-badge {
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 0.8em;
+            font-weight: 700;
+        }
+
+        .review-badge.correct { background: #d4edda; color: #155724; }
+        .review-badge.wrong { background: #f8d7da; color: #721c24; }
+        .review-badge.unanswered { background: #e2e3e5; color: #383d41; }
+
+        .review-option {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: center;
+            padding: 12px 14px;
+            border-radius: 10px;
+            border: 2px solid #e5e7eb;
+            margin-bottom: 8px;
+            background: #fafafa;
+        }
+
+        .review-option.is-correct {
+            background: #d4edda;
+            border-color: #28a745;
+        }
+
+        .review-option.is-user-wrong {
+            background: #f8d7da;
+            border-color: #dc3545;
+        }
+
+        .review-option.is-user-correct {
+            background: #cce5ff;
+            border-color: #007bff;
+        }
+
+        .review-option-text { flex: 1; }
+        .review-option-tags {
+            font-size: 0.8em;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .admin-section-title {
+            margin-top: 40px;
+            margin-bottom: 10px;
         }
 
         .question-card {
@@ -1094,7 +1272,7 @@ $showAdminPanel = isset($_GET['admin']);
 
                 <h3>How We Use Your Information:</h3>
                 <ul>
-                    <li>To send you your quiz results via email</li>
+                    <li>To show your quiz score and answer key after the test</li>
                     <li>To maintain records of quiz submissions</li>
                     <li>To improve our quiz content and user experience</li>
                     <li>For administrative purposes and communication</li>
@@ -1138,6 +1316,24 @@ $showAdminPanel = isset($_GET['admin']);
                     </a>
                 </form>
 
+            <?php elseif (isset($_GET['review'])): ?>
+                <!-- Admin Answer Key Review -->
+                <?php if ($adminReviewAttempt): ?>
+                    <h1>📋 Answer Key Review</h1>
+                    <p class="subtitle">Attempt ID: <?php echo htmlspecialchars($adminReviewAttempt['id']); ?></p>
+                    <?php echo renderResultsSummaryCard($adminReviewAttempt); ?>
+                    <h2 style="margin: 30px 0 10px;">Full Answer Key</h2>
+                    <?php echo renderAnswerReview($adminReviewAttempt['questions'] ?? [], $adminReviewAttempt['answers'] ?? []); ?>
+                <?php else: ?>
+                    <h1>📋 Answer Key Review</h1>
+                    <div class="error">Attempt not found.</div>
+                <?php endif; ?>
+                <div style="margin-top: 30px;">
+                    <a href="?admin=1" style="text-decoration: none;">
+                        <button type="button" class="btn btn-secondary">← Back to Admin Dashboard</button>
+                    </a>
+                </div>
+
             <?php else: ?>
                 <!-- Admin Dashboard -->
                 <h1>⚙️ Admin Dashboard</h1>
@@ -1151,7 +1347,58 @@ $showAdminPanel = isset($_GET['admin']);
                 <?php endif; ?>
 
                 <div class="admin-panel">
-                    <h2>Upload New Quiz</h2>
+                    <h2 class="admin-section-title" style="margin-top: 0;">Test Results Report</h2>
+                    <p style="color: #666; margin-bottom: 10px;">
+                        Summary of completed quiz attempts (<?php echo count($quizAttempts); ?> total).
+                    </p>
+                    <?php if (count($quizAttempts) > 0): ?>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Date/Time</th>
+                                    <th>Candidate</th>
+                                    <th>Quiz</th>
+                                    <th>Score</th>
+                                    <th>Status</th>
+                                    <th>Time Spent</th>
+                                    <th>Answer Key</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($quizAttempts as $i => $attempt): ?>
+                                    <tr>
+                                        <td><?php echo $i + 1; ?></td>
+                                        <td><?php echo htmlspecialchars($attempt['completed_at'] ?? '-'); ?></td>
+                                        <td>
+                                            <?php echo htmlspecialchars($attempt['user_name'] ?? '-'); ?><br>
+                                            <small><?php echo htmlspecialchars($attempt['user_email'] ?? ''); ?></small>
+                                        </td>
+                                        <td><?php echo htmlspecialchars($attempt['quiz_title'] ?? '-'); ?></td>
+                                        <td>
+                                            <?php echo (int)($attempt['score'] ?? 0); ?>/<?php echo (int)($attempt['total'] ?? 0); ?>
+                                            (<?php echo htmlspecialchars((string)($attempt['percentage'] ?? 0)); ?>%)
+                                        </td>
+                                        <td>
+                                            <span class="status-badge <?php echo !empty($attempt['passed']) ? 'status-passed' : 'status-failed'; ?>" style="display:inline-block; margin:0; font-size:0.75em; padding:6px 10px;">
+                                                <?php echo htmlspecialchars($attempt['status'] ?? '-'); ?>
+                                            </span>
+                                        </td>
+                                        <td><?php echo htmlspecialchars($attempt['time_spent'] ?? '-'); ?></td>
+                                        <td>
+                                            <a href="?admin=1&review=<?php echo urlencode($attempt['id']); ?>" style="text-decoration:none;">
+                                                <button type="button" class="btn btn-sm">Show Answer Key</button>
+                                            </a>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    <?php else: ?>
+                        <p style="color: #999;">No test results yet.</p>
+                    <?php endif; ?>
+
+                    <h2 class="admin-section-title">Upload New Quiz</h2>
                     <p style="margin-bottom: 20px; color: #666;">
                         Upload a CSV file with the following format:<br>
                         <code>question, option1, option2, option3, option4, correct_index</code>
@@ -1328,6 +1575,27 @@ $showAdminPanel = isset($_GET['admin']);
                 <button class="btn btn-outline">🔐 Admin Panel</button>
             </a>
 
+        <?php elseif ($showResults): ?>
+            <!-- Results + Full Answer Key -->
+            <?php
+            $results = $_SESSION['quiz_results'];
+            $reviewQuestions = $results['questions'] ?? $questions;
+            $reviewAnswers = $results['answers'] ?? ($_SESSION['quiz_answers'] ?? []);
+            echo renderResultsSummaryCard($results);
+            ?>
+            <h2 style="margin: 30px 0 10px;">Full Answer Key</h2>
+            <p style="color:#666; margin-bottom: 10px;">Green = correct answer · Blue = your correct choice · Red = your incorrect choice</p>
+            <?php echo renderAnswerReview($reviewQuestions, $reviewAnswers); ?>
+
+            <div style="display: flex; gap: 15px; margin-top: 30px;">
+                <a href="?select_another=1" style="text-decoration: none; flex: 1;">
+                    <button class="btn btn-success" style="width: 100%;">📚 Take Another Quiz</button>
+                </a>
+                <a href="?logout=1" style="text-decoration: none; flex: 1;">
+                    <button class="btn btn-outline" style="width: 100%;">Logout</button>
+                </a>
+            </div>
+
         <?php elseif (!isset($_SESSION['selected_quiz'])): ?>
             <!-- Quiz Selection Page -->
             <h1>📚 Select a Quiz</h1>
@@ -1357,138 +1625,6 @@ $showAdminPanel = isset($_GET['admin']);
             <?php else: ?>
                 <div class="error">No quizzes available. Please contact the administrator.</div>
             <?php endif; ?>
-
-        <?php elseif ($showResults): ?>
-            <!-- Results Page -->
-            <?php
-            $results = $_SESSION['quiz_results'];
-            $passed = $results['passed'];
-?>
-<?php
-
-        $score = 0;
-        $total = count($questions);
-        
-        foreach ($questions as $index => $question) {
-            $userAnswer = isset($_SESSION['quiz_answers'][$index]) ? $_SESSION['quiz_answers'][$index] : -1;
-            if ($userAnswer === $question['correct']) {
-                $score++;
-            }
-        }
-        
-        $percentage = round(($score / $total) * 100, 2);
-        $timeSpent = time() - $_SESSION['start_time'];
-        $minutes = floor($timeSpent / 60);
-        $seconds = $timeSpent % 60;
-        
-        // Determine pass/fail based on quiz passing score
-        $passingScore = $selectedQuiz['passing_score'];
-        $passed = $percentage >= $passingScore;
-        $status = $passed ? "PASSED" : "FAILED";
-        
-        $_SESSION['quiz_results'] = [
-            'score' => $score,
-            'total' => $total,
-            'percentage' => $percentage,
-            'time_spent' => "$minutes minutes $seconds seconds",
-            'answers' => $_SESSION['quiz_answers'],
-            'quiz_title' => $selectedQuiz['title'],
-            'passed' => $passed,
-            'passing_score' => $passingScore,
-            'status' => $status
-        ];
-        
-        $userEmail = $_SESSION['user_email'];
-        $userName = $_SESSION['user_name'];
-        writeLog('INFO', "Quiz completed by $userName ($userEmail): Score=$score/$total ($percentage%), Status=$status, Time={$minutes}m{$seconds}s");
-        
-        $quizTitle = $selectedQuiz['title'];
-        $subject = "Your $quizTitle Results - $status";
-	// --OPPO email
-	//
-    // SMTP settings
-    $GMAIL_EMAIL = "kcommerce@gmail.com";
-    $mail->isSMTP();
-    $mail->Host       = 'smtp.gmail.com';
-    $mail->SMTPAuth   = true;
-    $mail->Username   = $GMAIL_EMAIL; // Your Gmail address
-    $mail->Password   = 'lgjp drlv rvjq smjv';    // App Password from Google
-    $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS; // or 'tls'
-    $mail->Port       = 587;
-    $mail->addAddress($_SESSION['user_email']);
-    $mail->addAddress($ADMIN_EMAIL);
-
-
-
-	//
-        // Create email message
-        $message = "Hello $userName,\n\n";
-        $message .= "Thank you for taking the $quizTitle!\n\n";
-        $message .= "=== YOUR RESULTS ===\n";
-        $message .= "Score: $score out of $total ($percentage%)\n";
-        $message .= "Passing Score Required: $passingScore%\n";
-        $message .= "Status: $status " . ($passed ? "✓" : "✗") . "\n";
-        $message .= "Time Spent: $minutes minutes $seconds seconds\n\n";
-        
-        if ($passed) {
-            $message .= "Congratulations! You have successfully passed the quiz.\n\n";
-        } else {
-            $message .= "Unfortunately, you did not meet the passing score. Please review the material and try again.\n\n";
-        }
-        
-        $message .= "Keep learning!\n\n";
-        $message .= "Best regards,\nQuiz Team";
-        
-        $headers = "From: $GMAIL_EMAIL\r\n";
-        $headers .= "Cc: $ADMIN_EMAIL\r\n";
-        $headers .= "Reply-To: $GMAIL_EMAIL\r\n";
-        $headers .= "X-Mailer: PHP/" . phpversion();
-	try {
-    // Email details
-    $mail->Subject = "Thank you for taking the $quizTitle!";
-    $mail->Body    = $message;
-       	$mail->send();
-            writeLog('INFO', "Results email sent to: $userEmail (CC: $ADMIN_EMAIL)");
-
-	} catch (Exception $e)
-	{
-            writeLog('ERROR', "Failed to send results email to: $userEmail");
-            writeLog('ERROR', "Mailer Error: $mail->ErrorInfo");
-
-	}
-
-?>
-            <div class="results-card">
-                <div class="success-icon"><?php echo $passed ? '🎉' : '📚'; ?></div>
-                <h1><?php echo $passed ? 'Congratulations!' : 'Keep Learning!'; ?></h1>
-                <h2 style="text-align: center; color: #666; margin-bottom: 20px;"><?php echo htmlspecialchars($results['quiz_title']); ?></h2>
-                
-                <div class="status-badge <?php echo $passed ? 'status-passed' : 'status-failed'; ?>">
-                    <?php echo $results['status']; ?> <?php echo $passed ? '✓' : '✗'; ?>
-                </div>
-
-                <div class="score-display">
-                    <?php echo $results['score']; ?>/<?php echo $results['total']; ?>
-                </div>
-                <div class="result-info">
-                    <p><strong>Percentage:</strong> <?php echo $results['percentage']; ?>%</p>
-                    <p><strong>Passing Score Required:</strong> <?php echo $results['passing_score']; ?>%</p>
-                    <p><strong>Time Spent:</strong> <?php echo $results['time_spent']; ?></p>
-                </div>
-                
-                <p style="margin: 20px 0; color: #666;">
-                    Results have been sent to your email: <strong><?php echo htmlspecialchars($_SESSION['user_email']); ?></strong>
-                </p>
-
-                <div style="display: flex; gap: 15px; margin-top: 30px;">
-                    <a href="?select_another=1" style="text-decoration: none; flex: 1;">
-                        <button class="btn btn-success" style="width: 100%;">📚 Take Another Quiz</button>
-                    </a>
-                    <a href="?logout=1" style="text-decoration: none; flex: 1;">
-                        <button class="btn btn-outline" style="width: 100%;">Logout</button>
-                    </a>
-                </div>
-            </div>
 
         <?php else: ?>
             <!-- Quiz Page - One Question at a Time -->
