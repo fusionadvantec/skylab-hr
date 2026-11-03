@@ -57,6 +57,28 @@ function saveQuizAttempt($attempt) {
     return true;
 }
 
+function deleteQuizAttempt($id) {
+    global $RESULTS_FILE;
+    $attempts = loadQuizAttempts();
+    $remaining = array_values(array_filter($attempts, function ($a) use ($id) {
+        return ($a['id'] ?? '') !== $id;
+    }));
+    if (count($remaining) === count($attempts)) {
+        return false;
+    }
+    $ok = @file_put_contents(
+        $RESULTS_FILE,
+        json_encode($remaining, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE),
+        LOCK_EX
+    );
+    if ($ok === false) {
+        writeLog('ERROR', "Failed to delete quiz attempt $id from $RESULTS_FILE");
+        return false;
+    }
+    writeLog('INFO', "Deleted quiz attempt $id");
+    return true;
+}
+
 function getQuizAttemptById($id) {
     foreach (loadQuizAttempts() as $attempt) {
         if (($attempt['id'] ?? '') === $id) {
@@ -620,6 +642,16 @@ if (isset($_POST['admin_action'])) {
                     $edit_error = "Failed to write the quiz CSV file.";
                     $editPostedRows = $rows;
                 }
+            }
+        }
+    } elseif ($_POST['admin_action'] === 'delete_attempt') {
+        if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in']) {
+            $attemptId = (string)($_POST['attempt_id'] ?? '');
+            $attempt = getQuizAttemptById($attemptId);
+            if ($attempt && deleteQuizAttempt($attemptId)) {
+                $upload_success = "Deleted result of " . ($attempt['user_name'] ?? '-') . " (" . ($attempt['quiz_title'] ?? '-') . ").";
+            } else {
+                $upload_error = "Result not found or could not be deleted.";
             }
         }
     } elseif ($_POST['admin_action'] === 'logout') {
@@ -1719,10 +1751,17 @@ $quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
                                             </span>
                                         </td>
                                         <td><?php echo htmlspecialchars($attempt['time_spent'] ?? '-'); ?></td>
-                                        <td>
-                                            <a href="?admin=1&review=<?php echo urlencode($attempt['id']); ?>" style="text-decoration:none;">
-                                                <button type="button" class="btn btn-sm">Show Answer Key</button>
-                                            </a>
+                                        <td style="white-space: nowrap;">
+                                            <div style="display: flex; gap: 6px; align-items: center;">
+                                                <a href="?admin=1&review=<?php echo urlencode($attempt['id']); ?>" style="text-decoration:none;">
+                                                    <button type="button" class="btn btn-sm">Show Answer Key</button>
+                                                </a>
+                                                <form method="POST" action="?admin=1" style="margin: 0;" onsubmit="return confirm(<?php echo htmlspecialchars(json_encode('Delete the result of ' . ($attempt['user_name'] ?? '-') . ' (' . ($attempt['quiz_title'] ?? '-') . ')? This cannot be undone.'), ENT_QUOTES); ?>);">
+                                                    <input type="hidden" name="admin_action" value="delete_attempt">
+                                                    <input type="hidden" name="attempt_id" value="<?php echo htmlspecialchars($attempt['id'] ?? ''); ?>">
+                                                    <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                                                </form>
+                                            </div>
                                         </td>
                                     </tr>
                                 <?php endforeach; ?>
