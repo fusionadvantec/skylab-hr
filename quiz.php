@@ -327,6 +327,83 @@ function saveQuizMapping($filename, $title, $csvFilename, $questionsCount, $pass
     return false;
 }
 
+// Validate and normalize quiz rows; returns [questions, errors]
+function normalizeQuizRows($rows) {
+    $questions = [];
+    $errors = [];
+    foreach ($rows as $i => $row) {
+        $label = 'Question ' . ($i + 1);
+        $question = trim((string)($row['question'] ?? ''));
+        $options = array_map(function ($o) { return trim((string)$o); }, $row['options'] ?? []);
+        $correct = $row['correct'] ?? '';
+
+        if ($question === '') {
+            $errors[] = "$label: question text is empty.";
+            continue;
+        }
+        if (count($options) !== 4 || in_array('', $options, true)) {
+            $errors[] = "$label: all 4 options are required.";
+            continue;
+        }
+        if (!is_numeric($correct) || (int)$correct < 0 || (int)$correct > 3) {
+            $errors[] = "$label: correct_index must be 0-3.";
+            continue;
+        }
+        $questions[] = ['question' => $question, 'options' => $options, 'correct' => (int)$correct];
+    }
+    if (empty($questions) && empty($errors)) {
+        $errors[] = "The quiz must contain at least one question.";
+    }
+    return [$questions, $errors];
+}
+
+function parseQuizCsvFile($path) {
+    $rows = [];
+    $handle = fopen($path, 'r');
+    if ($handle === FALSE) {
+        return [[], ["Cannot read uploaded file."]];
+    }
+    fgetcsv($handle);
+    while (($data = fgetcsv($handle)) !== FALSE) {
+        if (count($data) === 1 && trim((string)$data[0]) === '') {
+            continue;
+        }
+        $rows[] = [
+            'question' => $data[0] ?? '',
+            'options' => [$data[1] ?? '', $data[2] ?? '', $data[3] ?? '', $data[4] ?? ''],
+            'correct' => $data[5] ?? ''
+        ];
+    }
+    fclose($handle);
+    return normalizeQuizRows($rows);
+}
+
+function backupQuizFile($path) {
+    if (!file_exists($path)) {
+        return;
+    }
+    $backupDir = __DIR__ . '/tmp/quiz_backups/';
+    if (!is_dir($backupDir)) {
+        @mkdir($backupDir, 0775, true);
+    }
+    @copy($path, $backupDir . basename($path) . '.' . date('Ymd_His') . '.bak');
+}
+
+function writeQuestionsToCSV($path, $questions) {
+    $handle = fopen($path, 'w');
+    if ($handle === FALSE) {
+        writeLog('ERROR', "Failed to open quiz file for writing: $path");
+        return false;
+    }
+    fputcsv($handle, ['question', 'option1', 'option2', 'option3', 'option4', 'correct_index']);
+    foreach ($questions as $q) {
+        fputcsv($handle, [$q['question'], $q['options'][0], $q['options'][1], $q['options'][2], $q['options'][3], $q['correct']]);
+    }
+    fclose($handle);
+    writeLog('INFO', "Wrote " . count($questions) . " questions to $path");
+    return true;
+}
+
 // Function to load questions from CSV (optionally shuffle and limit)
 function loadQuestionsFromCSV($filename, $questionsToLoad = null, $shuffle = true) {
     $questions = [];
@@ -476,6 +553,72 @@ if (isset($_POST['admin_action'])) {
                     writeLog('INFO', "Quiz updated: index=$quizIndex, title='$quizTitle', questions=$questionsToLoad, pass=$passingScore%, duration={$durationMinutes}m");
                 } else {
                     $upload_error = "Failed to save quiz parameters.";
+                }
+            }
+        }
+    } elseif ($_POST['admin_action'] === 'replace_csv') {
+        if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in']) {
+            $quizIndex = (int)($_POST['quiz_index'] ?? -1);
+            $quizzes = loadQuizMapping($QUIZ_MAPPING_FILE);
+            
+            if (!isset($quizzes[$quizIndex])) {
+                $upload_error = "Quiz not found.";
+            } elseif (!isset($_FILES['csv_file']) || $_FILES['csv_file']['error'] !== UPLOAD_ERR_OK) {
+                $upload_error = "Error uploading file.";
+            } elseif (strtolower(pathinfo($_FILES['csv_file']['name'], PATHINFO_EXTENSION)) !== 'csv') {
+                $upload_error = "Please upload a CSV file.";
+            } else {
+                [$newQuestions, $errors] = parseQuizCsvFile($_FILES['csv_file']['tmp_name']);
+                $quizTitle = $quizzes[$quizIndex]['title'];
+                if (!empty($errors)) {
+                    $upload_error = "CSV for '$quizTitle' was not updated: " . implode(' ', array_slice($errors, 0, 5));
+                    writeLog('ERROR', "Replace CSV rejected for '$quizTitle': " . implode(' | ', $errors));
+                } else {
+                    $destination = $QUIZZES_FOLDER . basename($quizzes[$quizIndex]['filename']);
+                    backupQuizFile($destination);
+                    if (writeQuestionsToCSV($destination, $newQuestions)) {
+                        $upload_success = "CSV for '$quizTitle' updated (" . count($newQuestions) . " questions).";
+                        writeLog('INFO', "Admin replaced CSV for '$quizTitle' with " . count($newQuestions) . " questions");
+                    } else {
+                        $upload_error = "Failed to write CSV for '$quizTitle'.";
+                    }
+                }
+            }
+        }
+    } elseif ($_POST['admin_action'] === 'save_quiz_questions') {
+        if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in']) {
+            $quizIndex = (int)($_POST['quiz_index'] ?? -1);
+            $quizzes = loadQuizMapping($QUIZ_MAPPING_FILE);
+            
+            $rows = [];
+            foreach (($_POST['questions'] ?? []) as $row) {
+                if (!empty($row['delete'])) {
+                    continue;
+                }
+                $rows[] = [
+                    'question' => $row['question'] ?? '',
+                    'options' => [$row['o0'] ?? '', $row['o1'] ?? '', $row['o2'] ?? '', $row['o3'] ?? ''],
+                    'correct' => $row['correct'] ?? ''
+                ];
+            }
+            
+            if (!isset($quizzes[$quizIndex])) {
+                $edit_error = "Quiz not found.";
+            } else {
+                [$editedQuestions, $errors] = normalizeQuizRows($rows);
+                if (!empty($errors)) {
+                    $edit_error = implode(' ', $errors);
+                    $editPostedRows = $rows;
+                } else {
+                    $destination = $QUIZZES_FOLDER . basename($quizzes[$quizIndex]['filename']);
+                    backupQuizFile($destination);
+                    if (writeQuestionsToCSV($destination, $editedQuestions)) {
+                        writeLog('INFO', "Admin edited questions for '{$quizzes[$quizIndex]['title']}' (" . count($editedQuestions) . " questions)");
+                        header('Location: ' . $_SERVER['PHP_SELF'] . '?admin=1&quiz_edit=' . $quizIndex . '&saved=' . count($editedQuestions));
+                        exit;
+                    }
+                    $edit_error = "Failed to write the quiz CSV file.";
+                    $editPostedRows = $rows;
                 }
             }
         }
@@ -688,6 +831,18 @@ if ($showAdminPanel && $adminLoggedIn && isset($_GET['quiz_key'])) {
     if (isset($availableQuizzes[$quizKeyIndex])) {
         $adminQuizKey = $availableQuizzes[$quizKeyIndex];
         $adminQuizKeyQuestions = loadQuestionsFromCSV($QUIZZES_FOLDER . $adminQuizKey['filename'], null, false);
+    }
+}
+$adminEditQuiz = null;
+$adminEditIndex = null;
+$adminEditRows = [];
+if ($showAdminPanel && $adminLoggedIn && isset($_GET['quiz_edit'])) {
+    $adminEditIndex = (int)$_GET['quiz_edit'];
+    if (isset($availableQuizzes[$adminEditIndex])) {
+        $adminEditQuiz = $availableQuizzes[$adminEditIndex];
+        $adminEditRows = isset($editPostedRows)
+            ? $editPostedRows
+            : loadQuestionsFromCSV($QUIZZES_FOLDER . $adminEditQuiz['filename'], null, false);
     }
 }
 $quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
@@ -947,6 +1102,56 @@ $quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
             font-size: 0.8em;
             font-weight: 700;
             white-space: nowrap;
+        }
+
+        .edit-question {
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-left: 5px solid #667eea;
+            border-radius: 12px;
+            padding: 18px;
+            margin-bottom: 16px;
+        }
+
+        .edit-question.is-deleted {
+            opacity: 0.45;
+            border-left-color: #dc3545;
+        }
+
+        .edit-question textarea {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 15px;
+            margin-bottom: 10px;
+            resize: vertical;
+        }
+
+        .edit-option {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+
+        .edit-option input[type="radio"] {
+            width: 20px;
+            height: 20px;
+            flex-shrink: 0;
+        }
+
+        .edit-option input[type="text"] {
+            flex: 1;
+            padding: 10px;
+            font-size: 14px;
+        }
+
+        .edit-delete {
+            color: #dc3545;
+            font-size: 0.9em;
+            cursor: pointer;
         }
 
         .admin-section-title {
@@ -1354,6 +1559,93 @@ $quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
                     </a>
                 </div>
 
+            <?php elseif (isset($_GET['quiz_edit'])): ?>
+                <!-- Admin Quiz Question Editor -->
+                <?php if ($adminEditQuiz): ?>
+                    <h1>✏️ Edit Questions: <?php echo htmlspecialchars($adminEditQuiz['title']); ?></h1>
+                    <p class="subtitle">File: <?php echo htmlspecialchars($adminEditQuiz['filename']); ?> · Select the radio button next to the correct answer.</p>
+
+                    <?php if (isset($_GET['saved'])): ?>
+                        <div class="success">Saved <?php echo (int)$_GET['saved']; ?> questions.</div>
+                    <?php endif; ?>
+                    <?php if (isset($edit_error)): ?>
+                        <div class="error">Not saved: <?php echo htmlspecialchars($edit_error); ?></div>
+                    <?php endif; ?>
+
+                    <form method="POST" action="?admin=1&quiz_edit=<?php echo (int)$adminEditIndex; ?>" id="editQuestionsForm">
+                        <input type="hidden" name="admin_action" value="save_quiz_questions">
+                        <input type="hidden" name="quiz_index" value="<?php echo (int)$adminEditIndex; ?>">
+
+                        <div id="questionList">
+                            <?php foreach ($adminEditRows as $qi => $q): ?>
+                                <div class="edit-question">
+                                    <div class="review-question-header">
+                                        <strong class="edit-question-number">Question <?php echo $qi + 1; ?></strong>
+                                        <label class="edit-delete"><input type="checkbox" name="questions[<?php echo $qi; ?>][delete]" value="1"> Delete</label>
+                                    </div>
+                                    <textarea name="questions[<?php echo $qi; ?>][question]" rows="2" required><?php echo htmlspecialchars($q['question']); ?></textarea>
+                                    <?php for ($oi = 0; $oi < 4; $oi++): ?>
+                                        <div class="edit-option">
+                                            <input type="radio" name="questions[<?php echo $qi; ?>][correct]" value="<?php echo $oi; ?>" <?php echo ((string)$q['correct'] === (string)$oi) ? 'checked' : ''; ?> required title="Correct answer">
+                                            <input type="text" name="questions[<?php echo $qi; ?>][o<?php echo $oi; ?>]" value="<?php echo htmlspecialchars($q['options'][$oi] ?? ''); ?>" placeholder="Option <?php echo $oi + 1; ?>" required>
+                                        </div>
+                                    <?php endfor; ?>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+
+                        <template id="questionTemplate">
+                            <div class="edit-question">
+                                <div class="review-question-header">
+                                    <strong class="edit-question-number">New question</strong>
+                                    <label class="edit-delete"><input type="checkbox" name="questions[__I__][delete]" value="1"> Delete</label>
+                                </div>
+                                <textarea name="questions[__I__][question]" rows="2" required></textarea>
+                                <?php for ($oi = 0; $oi < 4; $oi++): ?>
+                                    <div class="edit-option">
+                                        <input type="radio" name="questions[__I__][correct]" value="<?php echo $oi; ?>" required title="Correct answer">
+                                        <input type="text" name="questions[__I__][o<?php echo $oi; ?>]" placeholder="Option <?php echo $oi + 1; ?>" required>
+                                    </div>
+                                <?php endfor; ?>
+                            </div>
+                        </template>
+
+                        <div style="display: flex; gap: 15px; margin-top: 20px;">
+                            <button type="button" class="btn btn-secondary" id="addQuestionBtn">+ Add Question</button>
+                            <button type="submit" class="btn">💾 Save All Questions</button>
+                        </div>
+                    </form>
+                    <script>
+                        (function() {
+                            let nextIndex = <?php echo count($adminEditRows); ?>;
+                            const list = document.getElementById('questionList');
+                            const template = document.getElementById('questionTemplate');
+                            document.getElementById('addQuestionBtn').addEventListener('click', function() {
+                                const html = template.innerHTML.replace(/__I__/g, nextIndex++);
+                                list.insertAdjacentHTML('beforeend', html);
+                                list.lastElementChild.scrollIntoView({ behavior: 'smooth' });
+                            });
+                            list.addEventListener('change', function(e) {
+                                if (e.target.matches('.edit-delete input')) {
+                                    const card = e.target.closest('.edit-question');
+                                    card.classList.toggle('is-deleted', e.target.checked);
+                                    card.querySelectorAll('textarea, input[type=text], input[type=radio]').forEach(function(el) {
+                                        el.required = !e.target.checked;
+                                    });
+                                }
+                            });
+                        })();
+                    </script>
+                <?php else: ?>
+                    <h1>✏️ Edit Questions</h1>
+                    <div class="error">Quiz not found.</div>
+                <?php endif; ?>
+                <div style="margin-top: 30px;">
+                    <a href="?admin=1" style="text-decoration: none;">
+                        <button type="button" class="btn btn-secondary">← Back to Admin Dashboard</button>
+                    </a>
+                </div>
+
             <?php elseif (isset($_GET['quiz_key'])): ?>
                 <!-- Admin Master Quiz Answer Key -->
                 <?php if ($adminQuizKey): ?>
@@ -1521,12 +1813,21 @@ $quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
                                             <input form="<?php echo $formId; ?>" type="number" name="duration_minutes" id="edit_duration_<?php echo $index; ?>" value="<?php echo (int)$quiz['duration_minutes']; ?>" min="1" required style="width: 70px; padding: 8px; border: 1px solid #ddd; border-radius: 6px;">
                                         </td>
                                         <td style="white-space: nowrap;">
-                                            <div style="display: flex; gap: 6px; align-items: center;">
+                                            <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
                                                 <form id="<?php echo $formId; ?>" method="POST" style="margin: 0;">
                                                     <input type="hidden" name="admin_action" value="update_quiz">
                                                     <input type="hidden" name="quiz_index" value="<?php echo $index; ?>">
                                                     <button type="submit" class="btn btn-sm">Save</button>
                                                 </form>
+                                                <form method="POST" action="?admin=1" enctype="multipart/form-data" style="margin: 0;" class="replace-csv-form">
+                                                    <input type="hidden" name="admin_action" value="replace_csv">
+                                                    <input type="hidden" name="quiz_index" value="<?php echo $index; ?>">
+                                                    <input type="file" name="csv_file" accept=".csv" style="display: none;" data-quiz-title="<?php echo htmlspecialchars($quiz['title']); ?>">
+                                                    <button type="button" class="btn btn-success btn-sm replace-csv-btn">Upload</button>
+                                                </form>
+                                                <a href="?admin=1&quiz_edit=<?php echo $index; ?>" style="text-decoration: none;">
+                                                    <button type="button" class="btn btn-secondary btn-sm">Edit</button>
+                                                </a>
                                                 <a href="?admin=1&quiz_key=<?php echo $index; ?>" style="text-decoration: none;">
                                                     <button type="button" class="btn btn-secondary btn-sm">เฉลย</button>
                                                 </a>
@@ -1563,6 +1864,22 @@ $quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
                             questionsInput.addEventListener('input', syncUploadDuration);
                             syncUploadDuration();
                         }
+
+                        document.querySelectorAll('.replace-csv-form').forEach(function(form) {
+                            const fileInput = form.querySelector('input[type=file]');
+                            form.querySelector('.replace-csv-btn').addEventListener('click', function() {
+                                fileInput.click();
+                            });
+                            fileInput.addEventListener('change', function() {
+                                if (!fileInput.files.length) return;
+                                const title = fileInput.getAttribute('data-quiz-title');
+                                if (confirm('Replace all questions in "' + title + '" with ' + fileInput.files[0].name + '?')) {
+                                    form.submit();
+                                } else {
+                                    fileInput.value = '';
+                                }
+                            });
+                        });
 
                         document.querySelectorAll('.edit-questions').forEach(function(input) {
                             input.addEventListener('change', function() {
