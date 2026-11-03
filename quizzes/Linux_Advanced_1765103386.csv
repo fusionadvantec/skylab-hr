@@ -1,0 +1,81 @@
+question,option1,option2,option3,option4,correct_index
+Which sysctl enables IPv4 packet forwarding?,net.ipv4.ip_forward,net.ipv6.conf.all.forwarding,net.ipv4.conf.all.forwarding,net.ip.forwarding,0
+Which command regenerates initramfs on Debian/Ubuntu?,update-initramfs -u,dracut -f,mkinitcpio -P,mkinitrd -f,0
+Which command rebuilds GRUB2 config on RHEL/CentOS?,grub2-mkconfig -o /boot/grub2/grub.cfg,update-grub,grub-mkconfig -o /boot/grub/grub.cfg,grub-mkrescue,0
+Which sysctl tunes TCP backlog size?,net.core.somaxconn,net.ipv4.tcp_max_syn_backlog,net.core.netdev_max_backlog,net.ipv4.tcp_syn_backlog,0
+Which command shows current kernel sysctl values?,sysctl -a,sysctl --print,sysctl list,procctl -a,0
+Which command shows full unit file and drop-ins for a service?,systemctl cat SERVICE,systemctl show SERVICE,systemctl status SERVICE,systemctl list-unit-files SERVICE,0
+Which directory holds drop-in overrides for a service?,/etc/systemd/system/SERVICE.service.d,/usr/lib/systemd/system/SERVICE.service.d,/etc/systemd/SERVICE.d,/etc/systemd/overrides/SERVICE,0
+Which command creates a transient service to run a task now?,systemd-run --unit=mytask,systemctl run mytask,systemctl start-transient mytask,rununit mytask,0
+Which command sets resource limits on a running unit?,systemctl set-property,systemctl limit,systemctl cgroup-set,systemctl set-limit,0
+Which unit type triggers actions based on calendar events?,timer,path,socket,target,0
+Which command shows dependencies of a target?,systemctl list-dependencies TARGET,systemctl depends TARGET,systemctl graph TARGET,systemctl show-deps TARGET,0
+Which mount path is the cgroups v2 unified hierarchy?,/sys/fs/cgroup,/cgroup2,/sys/cgroup2,/proc/cgroup2,0
+Which command unshares a new network namespace?,unshare -n,nsenter -n,ip netns add,ip netns exec,0
+Which command lists processes along with their cgroup path?,systemd-cgls,"ps -eo pid,cgroup",cgclassify -l,cgroups -l,1
+Which command enters a running container's namespaces by PID?,nsenter -t PID -a,unshare -p PID,enterns PID,ip netns exec PID,0
+Which tool records CPU profiling with call graphs?,perf record -g,strace -c,mpstat -P ALL,bpftrace -e 'profile:hz:99',0
+Which command inspects dynamic shared library dependencies?,ldd binary,readelf -h binary,nm binary,objdump -d binary,0
+Which environment variable forces preloading a shared library?,LD_PRELOAD,LD_LIBRARY_PATH,LD_FLAGS,LD_SO_PRELOAD,0
+Which command adds a policy routing rule for a source subnet?,ip rule add from 10.0.0.0/24 table 100,ip route add from 10.0.0.0/24 table 100,ip -4 add rule src 10.0.0.0/24 table 100,ip policy add from 10.0.0.0/24 table 100,0
+Which command adds a default route in table 100?,ip route add default via 192.0.2.1 table 100,ip rule add default via 192.0.2.1 table 100,ip route set default table 100,route add default table 100,0
+Which command creates VLAN 100 on eth0 using iproute2?,ip link add link eth0 name eth0.100 type vlan id 100,vconfig add eth0 100,ip vlan add eth0 100,ip link set eth0 type vlan id 100,0
+Which bonding mode provides 802.3ad (LACP)?,mode 4,mode 1,mode 2,mode 0,0
+Which command creates a bond interface with LACP using iproute2?,ip link add bond0 type bond mode 802.3ad,ip bond add bond0 802.3ad,ifenslave -c bond0 mode 802.3ad,nmcli bond add bond0 --mode active-backup,0
+Which nftables statement performs destination NAT for port 80?,dnat to 10.0.0.5:80,snat to 10.0.0.5:80,redirect to :80,masquerade 10.0.0.5:80,0
+Which iptables rule DNATs incoming TCP 80 to 10.0.0.5:8080?,iptables -t nat -A PREROUTING -p tcp --dport 80 -j DNAT --to-destination 10.0.0.5:8080,iptables -A FORWARD -p tcp --dport 80 -j DNAT --to 10.0.0.5:8080,iptables -t nat -A OUTPUT -p tcp --sport 80 -j DNAT --to 10.0.0.5:8080,iptables -t mangle -A PREROUTING -p tcp --dport 80 -j DNAT --to 10.0.0.5:8080,0
+Which iptables rule sets SNAT to the interface's IP dynamically?,iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE,iptables -t nat -A POSTROUTING -o eth0 -j SNAT --to-source 1.2.3.4,iptables -A FORWARD -o eth0 -j MASQUERADE,iptables -t nat -A OUTPUT -o eth0 -j MASQUERADE,0
+Which command displays TCP retransmissions and errors per interface?,ethtool -S eth0,ip -s link show eth0,ss -o state established,netstat -s,0
+Which curl option returns only HTTP response code?,-o-,-w '%{http_code}' -s -o /dev/null,-I -s,--code-only,1
+Which OpenSSL command tests TLS connectivity to host:443?,openssl s_client -connect host:443,openssl verify host:443,openssl tls -c host:443,openssl connect host 443,0
+Which dig option uses TCP instead of UDP?,+tcp,-t tcp,--tcp,+use-tcp,0
+Which command creates a RAID1 array with mdadm?,mdadm --create /dev/md0 --level=1 --raid-devices=2 /dev/sdb /dev/sdc,mdadm --make /dev/md0 -l1 -n2 /dev/sdb /dev/sdc,raidcreate /dev/md0 1 2,mdadm --new /dev/md0 --l=1 --n=2 /dev/sdb /dev/sdc,0
+Which command shows mdadm array details?,mdadm --detail /dev/md0,mdadm --list /dev/md0,cat /proc/md,lsblk -r /dev/md0,0
+Which command formats a partition with LUKS?,cryptsetup luksFormat /dev/sdb1,luksformat /dev/sdb1,cryptsetup format /dev/sdb1,mkfs.luks /dev/sdb1,0
+Which command opens a LUKS device mapping?,cryptsetup open /dev/sdb1 vault,cryptsetup attach /dev/sdb1 vault,luksopen /dev/sdb1 vault,dmsetup open vault /dev/sdb1,0
+Which command creates an LVM snapshot of LV 'data'?,lvcreate -s -n data_snap -L 5G /dev/vg/data,lvcreate --snap -n data_snap -L 5G /dev/vg/data,lvsnap create data 5G,lvcreate -S -n data_snap -L 5G /dev/vg/data,0
+Which command merges an LVM snapshot back into origin?,lvconvert --merge /dev/vg/data_snap,lvmerge /dev/vg/data_snap,lvcreate --merge /dev/vg/data_snap,lvrecover --merge /dev/vg/data_snap,0
+Which command sends btrfs subvolume changes to a file?,btrfs send -p snap1 snap2 > delta,btrfs diff snap1 snap2 > delta,btrfs export snap1 snap2 > delta,btrfs commit -p snap1 snap2 > delta,0
+Which command receives btrfs stream on target?,btrfs receive /mnt/backup,btrfs import /mnt/backup,btrfs apply /mnt/backup,btrfs load /mnt/backup,0
+Which btrfs command scrubs a mounted filesystem?,btrfs scrub start -Bd /mnt,btrfs check --scrub /mnt,btrfs balance --scrub /mnt,btrfs fsck --scrub /mnt,0
+Which command starts a btrfs balance operation?,btrfs balance start /mnt,btrfs rebalance /mnt,btrfs balance run /mnt,btrfs defrag -b /mnt,0
+Which ZFS command enables LZ4 compression on dataset?,zfs set compression=lz4 pool/dataset,zpool set compression=lz4 pool,zfs enable lz4 pool/dataset,zpool compress lz4 pool/dataset,0
+Which ZFS command shows pool status and errors?,zpool status,zfs status,zpool show,zfs list -o errors,0
+Which ext4 mount option enables full data journaling?,data=journal,data=ordered,journal=full,logmode=journal,0
+Which ext4 tool changes reserved block percentage?,tune2fs -m,resize2fs -m,dumpe2fs -m,e2fsck -m,0
+Which mount option reduces write amplification on SSDs (generic)?,noatime,sync,dirsync,commit=600,0
+Which command shows filesystem UUIDs?,blkid,lsblk -f,udevadm info,fdisk -l,0
+Which command traces syscalls with timestamps?,strace -tt -p PID,ltrace -tt -p PID,perf trace -tt -p PID,ftrace -tt -p PID,0
+Which command traces user-level function calls?,ltrace,strace,perf record,readelf,0
+Which perf command generates a report from recorded data?,perf report,perf show,perf analyze,perf read,0
+Which eBPF tool runs one-liner probes?,"bpftrace -e 'tracepoint:syscalls:sys_enter_openat { printf(""%s\n"", comm); }'",bpftool run,perf ebpf -e,ebpfctl -e,0
+Which ftrace interface enables function tracing?,echo function > /sys/kernel/debug/tracing/current_tracer,sysctl kernel.ftrace=function,trace-cmd set function,perf ftrace enable,0
+Which command toggles kernel SysRq features immediately?,echo 1 > /proc/sys/kernel/sysrq,sysctl -w kernel.sysrq=1,echo 0 > /proc/sys/kernel/sysrq,sysctl -p kernel.sysrq=1,1
+Which command lists SELinux booleans and their state?,getsebool -a,semanage boolean -l,sestatus -b,semodule -l,0
+Which command permanently sets an SELinux boolean?,setsebool -P httpd_can_network_connect on,semanage boolean -m --on httpd_can_network_connect,setsebool httpd_can_network_connect on,setenforce --boolean httpd_can_network_connect on,0
+Which command builds a policy module from audit logs?,audit2allow -M mymodule < /var/log/audit/audit.log,semanage module -M mymodule,semodule -M mymodule,audit2policy -M mymodule,0
+Which command loads an SELinux module file?,semodule -i mymodule.pp,semanage -i mymodule.pp,sestatus -i mymodule.pp,auditctl -i mymodule.pp,0
+Which command shows AppArmor profiles status?,aa-status,apparmor_status,systemctl status apparmor,aa-show,0
+Which command sets AppArmor profile to complain mode?,aa-complain /path/to/profile,aa-enforce /path/to/profile,aa-disable /path/to/profile,apparmor_parser -C /path/to/profile,0
+Which PAM file controls SSH authentication on many distros?,/etc/pam.d/sshd,/etc/pam.conf,/etc/security/pam_sshd.conf,/etc/ssh/pam.conf,0
+Which sshd_config option disables password auth?,PasswordAuthentication no,ChallengeResponseAuthentication no,UsePAM no,PermitEmptyPasswords no,0
+Which sshd_config option restricts key algorithms?,HostKeyAlgorithms,KexAlgorithms,PubkeyAcceptedAlgorithms,KeyAlgorithms,2
+Which RPM command verifies installed packages against metadata?,rpm -Va,rpm -V package,dnf verify all,rpm --verify-all,0
+Which DNF command rolls back a previous transaction?,dnf history rollback <ID>,dnf undo <ID>,dnf revert <ID>,dnf history reset <ID>,0
+Which dpkg command finds which package owns a file path?,dpkg -S /path/to/file,dpkg -L package,apt-file search /path,dpkg -p /path,0
+Which command updates the dynamic linker cache?,ldconfig,update-ld.so,ld.so --refresh,linker --update,0
+Which command chroots into a mounted root filesystem?,chroot /mnt/root,pivot_root /mnt/root,systemd-nspawn -r /mnt/root,nsenter -t 1 -m /mnt/root,0
+Which command mounts proc within a chroot for tools to work?,mount -t proc proc /mnt/root/proc,mount -t sysfs sys /mnt/root/sys,mount -t devtmpfs dev /mnt/root/dev,mount -t tmpfs tmp /mnt/root/tmp,0
+Which command shows boot messages from previous boot?,journalctl -b -1,dmesg -P,last -b,journalctl --prev,0
+Which command shows failed systemd units?,systemctl --failed,systemctl list-failed,journalctl --failed,systemctl status --failed,0
+Which command follows kernel ring buffer messages in realtime?,dmesg -w,dmesg -f,journalctl -k -f,kmsg -f,0
+Which tool displays ELF headers?,readelf -h,objdump -h,nm -h,file -h,0
+Which tool lists dynamic symbols in a shared object?,nm -D,readelf -s,objdump -T,ldd -s,0
+Which command dumps a library's SONAME?,readelf -d | grep SONAME,ldd | grep SONAME,nm -D | grep SONAME,objdump -x | grep SONAME,0
+Which grep option matches whole words only?,-w,-x,-F,-E,0
+Which sed command deletes lines 10 to 20?,"sed '10,20d' file",sed 'd 10-20' file,"sed 'del 10,20' file",sed 'rm 10..20' file,0
+Which awk pattern selects lines where 5th field equals 'ERROR'?,"$5==""ERROR""","$5=""ERROR""",$5 =~ /ERROR/,"$5 eq ""ERROR""",0
+Which Chrony command shows sources and their states?,chronyc sources -v,chronyc tracking,timedatectl timesources,ntpq -p,0
+Which timedatectl option sets the timezone?,timedatectl set-timezone Asia/Bangkok,timedatectl timezone Asia/Bangkok,timedatectl --timezone Asia/Bangkok,timedatectl set-tz Asia/Bangkok,0
+Which iptables table is used for destination/source NAT?,nat,filter,mangle,raw,0
+Which command creates a compressed tar archive with xz?,tar -cJf archive.tar.xz dir/,tar -czf archive.tar.xz dir/,xz -c dir/ > archive.tar.xz,tar -c --xz -f archive.tar.xz dir/,0

@@ -1,0 +1,16 @@
+question,option1,option2,option3,option4,correct_index
+"What does the 'ls' command do in Linux?","List files and directories","Delete files","Create directories","Copy files",0
+"Which command is used to print the current working directory?","cd","pwd","mkdir","ls",1
+"What does the 'mkdir' command do?","Move files","Make directory","Remove directory","List directory",1
+"Which command is used to delete files in Linux?","del","remove","rm","delete",2
+"What does 'cat' command do?","Display file contents","Create files","Delete files","Rename files",0
+"Which command creates an empty file?","create","new","touch","make",2
+"What does the 'grep' command do?","Copy files","Search for patterns in text","Delete lines","Create files",1
+"Which command is used to change file permissions?","chown","chmod","change","perm",1
+"What does 'sudo' command do?","Shutdown system","Execute command with root privileges","Show users","System update",1
+"Which command displays running processes?","proc","running","ps","show",2
+"What does the 'tar' command do?","Delete files","Archive and compress files","Transfer files","Test files",1
+"Which command is used to search for files?","search","find","locate-file","seek",1
+"What does 'wget' command do?","Get website","Download files from internet","Web generate","Write files",1
+"Which command shows disk usage?","disk","du","space","storage",1
+"What does the 'top' command display?","Top files","System processes in real-time","Top directories","Top users",1

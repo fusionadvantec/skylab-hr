@@ -1,0 +1,81 @@
+question,option1,option2,option3,option4,correct_index
+What does 'ls -lh' display compared to 'ls -l'?,Human-readable sizes,Hidden files,Sorted by size,Long listing without sizes,0
+Which 'ls' option includes hidden files and '.'/'..'?,-a,-A,-h,-R,0
+What does 'ls -A' exclude compared to '-a'?,Excludes '.' and '..',Excludes hidden files,Excludes symlinks,Excludes directories,0
+Which command shows inode numbers with listing?,ls -i,ls -n,ls -l,stat,0
+What does 'stat file' NOT show by default?,Filesystem UUID,Inode number,Access/modify times,File size,0
+Which chmod mode removes execute for others only?,chmod o-x file,chmod a-x file,chmod g-x file,chmod u-x file,0
+What does 'chmod 750 file' set?,"Owner rwx, group rx, others none","Owner rwx, group r, others none","Owner rw, group rx, others none","Owner rw, group r, others none",0
+Which command sets the sticky bit on a directory?,chmod +t dir,chmod 777 dir,chattr +i dir,setfacl -m t dir,0
+Which permission bit allows files to run with owner's privileges?,setuid,setgid,sticky,immutable,0
+Which command changes owner and group together?,chown user:group file,chown user file,chgrp group file,usermod -g group,0
+Which command shows ACLs on a file?,getfacl file,lsattr file,stat -f file,ls -al file,0
+Which command adds an ACL granting 'alice' read to file?,setfacl -m u:alice:r file,chmod +r alice file,chown alice file,setfacl -d u:alice:r file,0
+What does 'grep -E' enable?,Extended regex,Exact match only,Exclude pattern,Case-insensitive match,0
+Which 'grep' option inverts the match?,-v,-n,-l,-c,0
+Which 'grep' option prints only the matching part of a line?,-o,-n,-H,-F,0
+"What does 'awk -F:"";""' change?",Field delimiter to ';',Record delimiter to ';',Output separator to ';',Comment character to ';',0
+Which 'sed' command replaces 'foo' with 'bar' globally?,sed 's/foo/bar/g' file,sed 'r/foo/bar' file,sed 'c/foo/bar' file,sed 'y/foo/bar/' file,0
+Which tool removes duplicate adjacent lines keeping first?,uniq,sort,comm,nl,0
+Which 'sort' option sorts numerically?,-n,-r,-u,-h,0
+"Which command counts lines, words, and bytes?",wc,nl,cat -n,paste,0
+Which 'cut' option selects fields by delimiter?,-f,-c,-b,-s,0
+"What does 'paste -d, file1 file2' do?","Merges lines side-by-side with ','",Concatenates files,"Filters columns by ','","Splits on ','",0
+What is the purpose of 'xargs -0'?,Read NUL-delimited input,Limit args to zero,Disable execution,Use stdin only,0
+Which command shows block devices and mountpoints?,lsblk,blkid,df,mount,0
+Which 'df' option shows filesystem type?,-T,-h,-i,-k,0
+What does 'du -sh /var/log' show?,Human-readable size of /var/log,Sizes of each file recursively,Free space on /var/log,Inode count of /var/log,0
+Which command checks and repairs ext4 filesystems?,e2fsck,fsck.xfs,xfs_repair,btrfs check,0
+Which tool shows filesystem parameters for ext filesystems?,tune2fs -l /dev/sda1,xfs_info /dev/sda1,btrfs inspect-internal,dumpe2fs -h /dev/sda1,0
+Which mount option disables access time updates?,noatime,nodiratime,relatime,sync,0
+Where are persistent mounts defined?,/etc/fstab,/etc/mtab,/proc/mounts,/etc/mounts,0
+Which 'mount' option mounts read-only?,-o ro,-o rw,--readwrite,-rwx,0
+Which command initializes a physical volume for LVM?,pvcreate,vgcreate,lvcreate,mkfs,0
+Which command creates a new volume group?,vgcreate,pvcreate,vgextend,vgscreate,0
+Which command creates a logical volume?,lvcreate,vgcreate,pvdisplay,mkfs.ext4,0
+Which command extends a logical volume and resizes fs?,lvextend -r,lvresize -n,lvchange -r,vgextend -r,0
+Which command displays LVM logical volumes?,lvs,vgs,pvs,lvscan,0
+Which command grows an XFS filesystem online?,xfs_growfs,resize2fs,btrfs filesystem resize,tune2fs -r,0
+Which signal does 'kill -9 PID' send?,SIGKILL,SIGTERM,SIGHUP,SIGSTOP,0
+What does 'kill -HUP PID' commonly do for daemons?,Reload configuration,Terminate immediately,Suspend,Restart kernel,0
+Which command changes priority of a running process?,renice,nice,chprio,priomod,0
+What does 'nice -n 10 cmd' do?,Runs with lower CPU priority,Runs with higher priority,Runs with real-time priority,Limits memory usage,0
+Which command shows all processes regardless of terminal?,ps aux,ps -ef,top -b,pstree -a,0
+Which command shows realtime process view with CPU/mem?,top,ps,vmstat,sar,0
+Which 'journalctl' option shows logs with explanations?,-xe,-b,-f,-u,0
+Which 'systemctl' subcommand enables service at boot?,enable,start,mask,reload,0
+What does 'systemctl daemon-reload' do?,Reloads unit files after changes,Restarts all services,Reloads journal,Rebuilds initramfs,0
+Which command creates a drop-in override for a unit?,systemctl edit SERVICE,systemctl override SERVICE,systemctl mask SERVICE,systemctl enable SERVICE,0
+What does 'systemctl isolate multi-user.target' do?,Switches to non-graphical multi-user mode,Enables graphical.target,Reboots system,Starts single-user mode,0
+Which target provides emergency shell with minimal services?,emergency.target,rescue.target,multi-user.target,basic.target,0
+Which 'journalctl' option shows only kernel messages?,-k,-u,-b,-p,0
+Which tool lists open TCP sockets with PIDs?,ss -t -p,netstat -u,lsof -n,ip -s link,0
+Which 'ip' command shows addresses on interfaces?,ip addr show,ip link show,ip route show,ip neigh show,0
+Which 'ip' command adds a static route?,ip route add,ip addr add,ip link add,ip neigh add,0
+Which command tests reachability with count of 5?,ping -c 5 host,ping host -n 5,ping -t 5 host,ping -C 5 host,0
+Which command traces the path packets take to a host?,traceroute,tracepath,mtr,route,0
+Which 'dig' syntax queries MX records?,dig -t MX domain,dig --mx domain,dig -mx domain,dig mx=domain,0
+Which command inspects DNS quickly with minimal output?,host domain,nslookup domain,dig +short domain,resolve domain,0
+Which command captures HTTP traffic on eth0?,tcpdump -i eth0 port 80,tcpdump -i eth0 tcp dst 80,tcpdump -i eth0 proto http,tcpdump -i eth0 port 53,0
+Which firewall command lists iptables filter rules?,iptables -L,iptables -S,nft list ruleset,ufw status verbose,0
+Which nftables command shows active ruleset?,nft list ruleset,nft show tables,nft -L,nft get rules,0
+Which command opens an SSH session using a key file?,ssh -i key.pem user@host,ssh -K user@host,ssh -k user@host,ssh --key user@host,0
+Which SSH option forwards a local port to remote?,-L local:remote,-R local:remote,-D local,-W host:port,0
+"Which rsync option preserves permissions, times, symlinks?",-a,-r,-p,-t,0
+Which scp option sets non-default SSH port?,-P,-p,-oPort,--port,0
+Which command shows SELinux mode and policy status?,sestatus,getenforce,semodule -l,seinfo,0
+Which command switches SELinux between Enforcing/Permissive?,setenforce,sestatus,semanage,restorecon,0
+Which command views SELinux context of a file?,ls -Z,getfacl,lsattr,stat -Z,0
+Which command restores default SELinux contexts?,restorecon -Rv path,semanage fcontext -a,fixfiles default,sestatus --restore,0
+Which tool manages SELinux file context mappings?,semanage fcontext,sestatus,chcon,audit2allow,0
+Which command searches audit logs for AVC denials?,ausearch -m AVC,journalctl -k,auditctl -l,dmesg -T,0
+Which command shows CPU/memory usage summarized?,vmstat,iostat,free,mpstat,0
+Which command shows disk I/O per device?,iostat -dx,vmstat -d,sar -d,iotop -b,0
+Which command shows per-CPU usage?,mpstat -P ALL,sar -u,vmstat -p,top -H,0
+Which 'sar' command reports CPU every second for 10 samples?,sar -u 1 10,sar -r 1 10,sar -d 1 10,sar -n DEV 1 10,0
+Which sysctl controls swappiness?,vm.swappiness,vm.dirty_ratio,kernel.panic,fs.file-max,0
+Which file persists sysctl settings across reboots?,/etc/sysctl.conf,/etc/systemd/sysctl.conf,/etc/kernel/sysctl,/proc/sys/sysctl.conf,0
+Which command immediately applies settings in /etc/sysctl.conf?,sysctl -p,sysctl --apply,sysctl --reload,systemctl reload sysctl,0
+Which limit does 'ulimit -n' affect?,Max open file descriptors,Max processes,Max memory,Max core file size,0
+Where does journald store persistent logs by default when enabled?,/var/log/journal,/var/journal,/var/log/systemd,/var/lib/journal,0
+Which setting enables persistent journald storage?,Storage=persistent in /etc/systemd/journald.conf,Persistent=true in journald.conf,EnablePersistence=yes in journald.conf,LogToDisk=1 in journald.conf,0

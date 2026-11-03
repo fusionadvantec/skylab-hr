@@ -1,0 +1,101 @@
+{
+    "categories": [
+        {
+            "id": 1,
+            "name": "Sales & Presales",
+            "color": "sales",
+            "quizzes": [
+                {
+                    "name": "Sales",
+                    "url": "https:\/\/forms.office.com\/Pages\/ResponsePage.aspx?id=UHUeFoymt0mpL23ehzK4R9ieN9XvAcZHnLihrLhsTcdUNjNEOVA2VjRXRDczWTY4SFYySVRZOEJVRi4u"
+                },
+                {
+                    "name": "Presale Engineer",
+                    "url": "https:\/\/forms.office.com\/r\/RV8LNMjXtK"
+                },
+                {
+                    "name": "Presale Manager",
+                    "url": "https:\/\/forms.office.com\/r\/Ea1vD11m7m"
+                }
+            ]
+        },
+        {
+            "id": 2,
+            "name": "Support",
+            "color": "engineering",
+            "quizzes": [
+                {
+                    "name": "Support Engineer",
+                    "url": "https:\/\/forms.office.com\/r\/QKHntJpv90"
+                }
+            ]
+        },
+        {
+            "id": 3,
+            "name": "Technical",
+            "color": "technical",
+            "quizzes": [
+                {
+                    "name": "Project Management",
+                    "url": "https:\/\/forms.office.com\/r\/4tbckR4Avg"
+                },
+                {
+                    "name": "Technical (Security)",
+                    "url": "https:\/\/forms.office.com\/r\/ANd43iNHXG"
+                },
+                {
+                    "name": "Network",
+                    "url": "https:\/\/forms.office.com\/r\/7r0eDvXXPG"
+                },
+                {
+                    "name": "NodeJS",
+                    "url": "https:\/\/forms.office.com\/r\/Mre9tBtg8N"
+                },
+                {
+                    "name": "Mobile DevOps",
+                    "url": "https:\/\/forms.office.com\/r\/E67smShEut"
+                }
+            ]
+        },
+        {
+            "id": 4,
+            "name": "Personal & English",
+            "color": "personal",
+            "quizzes": [
+                {
+                    "name": "Personal",
+                    "url": "https:\/\/forms.office.com\/r\/tUCpmKYWYa"
+                },
+                {
+                    "name": "English",
+                    "url": "https:\/\/forms.office.com\/r\/X7zY1Mmq5N"
+                },
+                {
+                    "name": "English for Manager",
+                    "url": "https:\/\/forms.office.com\/r\/2Rpx4wsfDR"
+                },
+                {
+                    "name": "External English Test",
+                    "url": "https:\/\/preply.com\/en\/language-tests\/english"
+                }
+            ]
+        },
+        {
+            "id": 5,
+            "name": "Quiz",
+            "color": "sales",
+            "quizzes": [
+                {
+                    "name": "Quiz",
+                    "url": "https:\/\/skylab.fusion.co.th\/hr\/quiz.php"
+                }
+            ]
+        },
+        {
+            "id": 6,
+            "name": "AI",
+            "color": "sales",
+            "quizzes": []
+        }
+    ]
+}
