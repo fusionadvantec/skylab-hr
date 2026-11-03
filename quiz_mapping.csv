@@ -1,6 +1,6 @@
-"Quiz Title","CSV Filename","Questions to Load","Passing Score (%)"
-"Linux Intermediate",Linux_Intermediate_1765103363.csv,10,70
-"Linux Advanced",Linux_Advanced_1765103386.csv,10,70
-"Linux Essential",Linux_Essential_1765100611.csv,10,70
-"AI Engineer Intermediate",AI_Engineer_Intermediate_1793678038.csv,10,70
-"AI Engineer Advanced",AI_Engineer_Advanced_1793678126.csv,10,70
+"Quiz Title","CSV Filename","Questions to Load","Passing Score (%)","Duration (minutes)"
+"Linux Intermediate",Linux_Intermediate_1765103363.csv,10,70,10
+"Linux Advanced",Linux_Advanced_1765103386.csv,10,70,10
+"Linux Essential",Linux_Essential_1765100611.csv,10,70,10
+"AI Engineer Intermediate",AI_Engineer_Intermediate_1793678038.csv,10,70,10
+"AI Engineer Advanced",AI_Engineer_Advanced_1793678126.csv,10,70,10

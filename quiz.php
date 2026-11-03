@@ -13,10 +13,16 @@ session_start();
 $ADMIN_EMAIL = "Quiztest@fusion.co.th";
 $QUIZ_MAPPING_FILE = "quiz_mapping.csv";
 $QUIZZES_FOLDER = "quizzes/";
-$TIME_PER_QUESTION = 60;
+$SECONDS_PER_QUESTION = 60; // default: 1 minute per quiz item
 $ADMIN_PASSWORD = "IloveFusion@1234";
 $DEFAULT_QUESTIONS_TO_LOAD = 10;
 $LOG_FILE = "/var/log/nginx/quiz.log";
+
+function defaultDurationMinutes($questionsCount) {
+    global $SECONDS_PER_QUESTION;
+    $questionsCount = max(1, (int)$questionsCount);
+    return (int)ceil(($questionsCount * $SECONDS_PER_QUESTION) / 60);
+}
 
 // Logging function
 function writeLog($level, $message) {
@@ -56,13 +62,21 @@ function loadQuizMapping($filename) {
         while (($data = fgetcsv($handle)) !== FALSE) {
             $lineNum++;
             if (count($data) >= 4) {
+                $questionsCount = (int)$data[2];
+                $durationMinutes = isset($data[4]) && $data[4] !== ''
+                    ? (int)$data[4]
+                    : defaultDurationMinutes($questionsCount);
+                if ($durationMinutes <= 0) {
+                    $durationMinutes = defaultDurationMinutes($questionsCount);
+                }
                 $quizzes[] = [
                     "title" => $data[0],
                     "filename" => $data[1],
-                    "questions_count" => (int)$data[2],
-                    "passing_score" => (int)$data[3]
+                    "questions_count" => $questionsCount,
+                    "passing_score" => (int)$data[3],
+                    "duration_minutes" => $durationMinutes
                 ];
-                writeLog('DEBUG', "Loaded quiz from line $lineNum: Title='{$data[0]}', File='{$data[1]}', Count={$data[2]}, PassingScore={$data[3]}%");
+                writeLog('DEBUG', "Loaded quiz from line $lineNum: Title='{$data[0]}', File='{$data[1]}', Count={$questionsCount}, PassingScore={$data[3]}%, Duration={$durationMinutes}m");
             } else {
                 writeLog('ERROR', "Invalid quiz mapping data at line $lineNum: " . json_encode($data));
             }
@@ -123,7 +137,7 @@ function autoDiscoverQuizzes($quizzesFolder, $mappingFile, $defaultCount) {
         $title = ucwords($title);
         
         writeLog('INFO', "Auto-adding quiz: $title (file: $filename)");
-        saveQuizMapping($mappingFile, $title, $filename, $defaultCount, 70);
+        saveQuizMapping($mappingFile, $title, $filename, $defaultCount, 70, defaultDurationMinutes($defaultCount));
         $newQuizzesAdded++;
     }
     
@@ -134,23 +148,51 @@ function autoDiscoverQuizzes($quizzesFolder, $mappingFile, $defaultCount) {
     }
 }
 
-// Function to save quiz mapping
-function saveQuizMapping($filename, $title, $csvFilename, $questionsCount, $passingScore = 70) {
-    $fileExists = file_exists($filename);
-    
-    writeLog('DEBUG', "Saving quiz mapping: Title='$title', File='$csvFilename', Count=$questionsCount, PassingScore=$passingScore%");
-    
-    $handle = fopen($filename, "a");
-    
-    if (!$fileExists) {
-        fputcsv($handle, ["Quiz Title", "CSV Filename", "Questions to Load", "Passing Score (%)"]);
-        writeLog('INFO', "Created new quiz mapping file: $filename");
+// Function to write all quiz mappings (overwrite)
+function writeAllQuizMappings($filename, $quizzes) {
+    $handle = fopen($filename, "w");
+    if ($handle === FALSE) {
+        writeLog('ERROR', "Failed to open quiz mapping file for writing: $filename");
+        return false;
     }
     
-    fputcsv($handle, [$title, $csvFilename, $questionsCount, $passingScore]);
+    fputcsv($handle, ["Quiz Title", "CSV Filename", "Questions to Load", "Passing Score (%)", "Duration (minutes)"]);
+    foreach ($quizzes as $quiz) {
+        fputcsv($handle, [
+            $quiz['title'],
+            $quiz['filename'],
+            $quiz['questions_count'],
+            $quiz['passing_score'],
+            $quiz['duration_minutes']
+        ]);
+    }
     fclose($handle);
+    writeLog('INFO', "Wrote " . count($quizzes) . " quiz mappings to $filename");
+    return true;
+}
+
+// Function to save quiz mapping (append)
+function saveQuizMapping($filename, $title, $csvFilename, $questionsCount, $passingScore = 70, $durationMinutes = null) {
+    if ($durationMinutes === null || $durationMinutes <= 0) {
+        $durationMinutes = defaultDurationMinutes($questionsCount);
+    }
     
-    writeLog('INFO', "Quiz mapping saved successfully");
+    writeLog('DEBUG', "Saving quiz mapping: Title='$title', File='$csvFilename', Count=$questionsCount, PassingScore=$passingScore%, Duration={$durationMinutes}m");
+    
+    $quizzes = loadQuizMapping($filename);
+    $quizzes[] = [
+        'title' => $title,
+        'filename' => $csvFilename,
+        'questions_count' => (int)$questionsCount,
+        'passing_score' => (int)$passingScore,
+        'duration_minutes' => (int)$durationMinutes
+    ];
+    
+    if (writeAllQuizMappings($filename, $quizzes)) {
+        writeLog('INFO', "Quiz mapping saved successfully");
+        return true;
+    }
+    return false;
 }
 
 // Function to load questions from CSV and randomize
@@ -219,8 +261,11 @@ if (isset($_POST['admin_action'])) {
                 $quizTitle = trim($_POST['quiz_title']);
                 $questionsToLoad = (int)$_POST['questions_to_load'];
                 $passingScore = (int)$_POST['passing_score'];
+                $durationMinutes = isset($_POST['duration_minutes']) && $_POST['duration_minutes'] !== ''
+                    ? (int)$_POST['duration_minutes']
+                    : defaultDurationMinutes($questionsToLoad);
                 
-                writeLog('DEBUG', "Upload details - Title: '$quizTitle', Questions: $questionsToLoad, PassingScore: $passingScore%");
+                writeLog('DEBUG', "Upload details - Title: '$quizTitle', Questions: $questionsToLoad, PassingScore: $passingScore%, Duration: {$durationMinutes}m");
                 
                 if (empty($quizTitle)) {
                     $upload_error = "Please enter a quiz title.";
@@ -231,6 +276,9 @@ if (isset($_POST['admin_action'])) {
                 } elseif ($passingScore <= 0 || $passingScore > 100) {
                     $upload_error = "Please enter a valid passing score between 1 and 100.";
                     writeLog('ERROR', "Quiz upload failed - invalid passing score: $passingScore");
+                } elseif ($durationMinutes <= 0) {
+                    $upload_error = "Please enter a valid total duration (minutes).";
+                    writeLog('ERROR', "Quiz upload failed - invalid duration: $durationMinutes");
                 } else {
                     $fileTmpPath = $_FILES['csv_file']['tmp_name'];
                     $fileName = $_FILES['csv_file']['name'];
@@ -243,8 +291,8 @@ if (isset($_POST['admin_action'])) {
                         writeLog('DEBUG', "Moving uploaded file to: $destination");
                         
                         if (move_uploaded_file($fileTmpPath, $destination)) {
-                            saveQuizMapping($QUIZ_MAPPING_FILE, $quizTitle, $newFilename, $questionsToLoad, $passingScore);
-                            $upload_success = "Quiz '$quizTitle' uploaded successfully!";
+                            saveQuizMapping($QUIZ_MAPPING_FILE, $quizTitle, $newFilename, $questionsToLoad, $passingScore, $durationMinutes);
+                            $upload_success = "Quiz '$quizTitle' uploaded successfully! Total duration: {$durationMinutes} minute(s).";
                             writeLog('INFO', "Quiz uploaded successfully: $newFilename");
                         } else {
                             $upload_error = "Error moving uploaded file.";
@@ -259,6 +307,42 @@ if (isset($_POST['admin_action'])) {
                 $uploadError = isset($_FILES['csv_file']['error']) ? $_FILES['csv_file']['error'] : 'unknown';
                 $upload_error = "Error uploading file.";
                 writeLog('ERROR', "File upload error: $uploadError");
+            }
+        }
+    } elseif ($_POST['admin_action'] === 'update_quiz') {
+        if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in']) {
+            $quizIndex = (int)($_POST['quiz_index'] ?? -1);
+            $quizTitle = trim($_POST['quiz_title'] ?? '');
+            $questionsToLoad = (int)($_POST['questions_to_load'] ?? 0);
+            $passingScore = (int)($_POST['passing_score'] ?? 0);
+            $durationMinutes = (int)($_POST['duration_minutes'] ?? 0);
+            
+            writeLog('INFO', "Admin updating quiz index $quizIndex");
+            
+            $quizzes = loadQuizMapping($QUIZ_MAPPING_FILE);
+            if (!isset($quizzes[$quizIndex])) {
+                $upload_error = "Quiz not found.";
+                writeLog('ERROR', "Quiz update failed - invalid index: $quizIndex");
+            } elseif (empty($quizTitle)) {
+                $upload_error = "Please enter a quiz title.";
+            } elseif ($questionsToLoad <= 0) {
+                $upload_error = "Please enter a valid number of questions to load.";
+            } elseif ($passingScore <= 0 || $passingScore > 100) {
+                $upload_error = "Please enter a valid passing score between 1 and 100.";
+            } elseif ($durationMinutes <= 0) {
+                $upload_error = "Please enter a valid total duration (minutes).";
+            } else {
+                $quizzes[$quizIndex]['title'] = $quizTitle;
+                $quizzes[$quizIndex]['questions_count'] = $questionsToLoad;
+                $quizzes[$quizIndex]['passing_score'] = $passingScore;
+                $quizzes[$quizIndex]['duration_minutes'] = $durationMinutes;
+                
+                if (writeAllQuizMappings($QUIZ_MAPPING_FILE, $quizzes)) {
+                    $upload_success = "Quiz '$quizTitle' parameters updated successfully.";
+                    writeLog('INFO', "Quiz updated: index=$quizIndex, title='$quizTitle', questions=$questionsToLoad, pass=$passingScore%, duration={$durationMinutes}m");
+                } else {
+                    $upload_error = "Failed to save quiz parameters.";
+                }
             }
         }
     } elseif ($_POST['admin_action'] === 'logout') {
@@ -323,8 +407,9 @@ if (isset($_POST['select_quiz'])) {
         $_SESSION['current_question'] = 0;
         $_SESSION['quiz_answers'] = [];
         $_SESSION['start_time'] = time();
+        $_SESSION['quiz_duration_seconds'] = max(60, (int)$selectedQuiz['duration_minutes'] * 60);
         
-        writeLog('INFO', "Quiz loaded with " . count($_SESSION['quiz_questions']) . " questions");
+        writeLog('INFO', "Quiz loaded with " . count($_SESSION['quiz_questions']) . " questions, duration={$selectedQuiz['duration_minutes']}m");
         header('Location: ' . $_SERVER['PHP_SELF']);
         exit;
     } else {
@@ -340,6 +425,7 @@ if (isset($_GET['select_another'])) {
     unset($_SESSION['current_question']);
     unset($_SESSION['quiz_answers']);
     unset($_SESSION['start_time']);
+    unset($_SESSION['quiz_duration_seconds']);
     unset($_SESSION['quiz_results']);
     header('Location: ' . $_SERVER['PHP_SELF']);
     exit;
@@ -354,7 +440,7 @@ $questions = isset($_SESSION['quiz_questions']) ? $_SESSION['quiz_questions'] : 
 $selectedQuiz = isset($_SESSION['selected_quiz']) ? $_SESSION['selected_quiz'] : null;
 
 // Handle quiz navigation
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && ($_POST['action'] === 'next_question' || $_POST['action'] === 'prev_question')) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array($_POST['action'], ['next_question', 'prev_question', 'finish_quiz'], true)) {
     $currentIndex = (int)$_POST['current_index'];
     $answer = isset($_POST["answer"]) ? (int)$_POST["answer"] : -1;
     
@@ -364,8 +450,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && ($_POST[
         $_SESSION['quiz_answers'] = [];
     }
     $_SESSION['quiz_answers'][$currentIndex] = $answer;
+
+    // Enforce total quiz duration on the server
+    $durationSeconds = isset($_SESSION['quiz_duration_seconds']) ? (int)$_SESSION['quiz_duration_seconds'] : 0;
+    $startTime = isset($_SESSION['start_time']) ? (int)$_SESSION['start_time'] : time();
+    $timeExpired = $durationSeconds > 0 && (time() - $startTime) >= $durationSeconds;
     
-    if ($_POST['action'] === 'next_question') {
+    if ($_POST['action'] === 'finish_quiz' || $timeExpired) {
+        $_SESSION['current_question'] = count($questions);
+        writeLog('INFO', $timeExpired ? "Quiz time expired - forcing finish" : "User finished quiz via timer/submit");
+    } elseif ($_POST['action'] === 'next_question') {
         $_SESSION['current_question'] = $currentIndex + 1;
         writeLog('INFO', "User moved to next question: " . ($_SESSION['current_question'] + 1));
     } else {
@@ -1088,6 +1182,14 @@ $showAdminPanel = isset($_GET['admin']);
                         </div>
 
                         <div class="form-group">
+                            <label for="duration_minutes">Total Quiz Duration (minutes)</label>
+                            <input type="number" id="duration_minutes" name="duration_minutes" value="<?php echo defaultDurationMinutes($DEFAULT_QUESTIONS_TO_LOAD); ?>" min="1" required>
+                            <small style="color: #666; display: block; margin-top: 5px;">
+                                Default is 1 minute per question (auto-calculated from questions above). You can override this value.
+                            </small>
+                        </div>
+
+                        <div class="form-group">
                             <label for="csv_file">Select CSV File</label>
                             <input type="file" id="csv_file" name="csv_file" accept=".csv" required>
                         </div>
@@ -1096,6 +1198,7 @@ $showAdminPanel = isset($_GET['admin']);
                     </form>
 
                     <h2 style="margin-top: 40px;">Available Quizzes (<?php echo count($availableQuizzes); ?> total)</h2>
+                    <p style="color: #666; margin-bottom: 10px;">Edit quiz parameters below and click Save for that row.</p>
                     
                     <?php if (count($availableQuizzes) > 0): ?>
                         <table>
@@ -1104,18 +1207,37 @@ $showAdminPanel = isset($_GET['admin']);
                                     <th>#</th>
                                     <th>Quiz Title</th>
                                     <th>CSV Filename</th>
-                                    <th>Questions to Load</th>
-                                    <th>Passing Score</th>
+                                    <th>Questions</th>
+                                    <th>Passing %</th>
+                                    <th>Duration (min)</th>
+                                    <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <?php foreach ($availableQuizzes as $index => $quiz): ?>
+                                    <?php $formId = 'edit_quiz_' . $index; ?>
                                     <tr>
                                         <td><?php echo $index + 1; ?></td>
-                                        <td><?php echo htmlspecialchars($quiz['title']); ?></td>
-                                        <td><?php echo htmlspecialchars($quiz['filename']); ?></td>
-                                        <td><?php echo $quiz['questions_count']; ?></td>
-                                        <td><?php echo $quiz['passing_score']; ?>%</td>
+                                        <td>
+                                            <input form="<?php echo $formId; ?>" type="text" name="quiz_title" value="<?php echo htmlspecialchars($quiz['title']); ?>" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px;">
+                                        </td>
+                                        <td style="font-size: 0.85em; word-break: break-all;"><?php echo htmlspecialchars($quiz['filename']); ?></td>
+                                        <td>
+                                            <input form="<?php echo $formId; ?>" type="number" name="questions_to_load" class="edit-questions" value="<?php echo (int)$quiz['questions_count']; ?>" min="1" required style="width: 70px; padding: 8px; border: 1px solid #ddd; border-radius: 6px;" data-duration-target="edit_duration_<?php echo $index; ?>">
+                                        </td>
+                                        <td>
+                                            <input form="<?php echo $formId; ?>" type="number" name="passing_score" value="<?php echo (int)$quiz['passing_score']; ?>" min="1" max="100" required style="width: 70px; padding: 8px; border: 1px solid #ddd; border-radius: 6px;">
+                                        </td>
+                                        <td>
+                                            <input form="<?php echo $formId; ?>" type="number" name="duration_minutes" id="edit_duration_<?php echo $index; ?>" value="<?php echo (int)$quiz['duration_minutes']; ?>" min="1" required style="width: 70px; padding: 8px; border: 1px solid #ddd; border-radius: 6px;">
+                                        </td>
+                                        <td>
+                                            <form id="<?php echo $formId; ?>" method="POST" style="margin: 0;">
+                                                <input type="hidden" name="admin_action" value="update_quiz">
+                                                <input type="hidden" name="quiz_index" value="<?php echo $index; ?>">
+                                                <button type="submit" class="btn" style="padding: 8px 14px; font-size: 0.9em;">Save</button>
+                                            </form>
+                                        </td>
                                     </tr>
                                 <?php endforeach; ?>
                             </tbody>
@@ -1124,6 +1246,41 @@ $showAdminPanel = isset($_GET['admin']);
                         <p style="margin-top: 20px; color: #999; text-align: center;">No quizzes uploaded yet.</p>
                     <?php endif; ?>
                 </div>
+                <script>
+                    (function() {
+                        const secondsPerQuestion = <?php echo (int)$SECONDS_PER_QUESTION; ?>;
+                        const questionsInput = document.getElementById('questions_to_load');
+                        const durationInput = document.getElementById('duration_minutes');
+                        let durationManuallyEdited = false;
+
+                        if (durationInput) {
+                            durationInput.addEventListener('input', function() {
+                                durationManuallyEdited = true;
+                            });
+                        }
+
+                        function syncUploadDuration() {
+                            if (!questionsInput || !durationInput || durationManuallyEdited) return;
+                            const count = Math.max(1, parseInt(questionsInput.value, 10) || 1);
+                            durationInput.value = Math.ceil((count * secondsPerQuestion) / 60);
+                        }
+
+                        if (questionsInput) {
+                            questionsInput.addEventListener('input', syncUploadDuration);
+                            syncUploadDuration();
+                        }
+
+                        document.querySelectorAll('.edit-questions').forEach(function(input) {
+                            input.addEventListener('change', function() {
+                                const targetId = input.getAttribute('data-duration-target');
+                                const target = document.getElementById(targetId);
+                                if (!target) return;
+                                const count = Math.max(1, parseInt(input.value, 10) || 1);
+                                target.value = Math.ceil((count * secondsPerQuestion) / 60);
+                            });
+                        });
+                    })();
+                </script>
 
                 <div style="margin-top: 30px; display: flex; gap: 15px;">
                     <form method="POST" style="flex: 1;">
@@ -1188,8 +1345,8 @@ $showAdminPanel = isset($_GET['admin']);
                     <div class="quiz-card">
                         <h3><?php echo htmlspecialchars($quiz['title']); ?></h3>
                         <p>📄 <strong>Questions:</strong> <?php echo $quiz['questions_count']; ?> questions (randomly selected)</p>
-                        <p>⏱️ <strong>Time per question:</strong> <?php echo $TIME_PER_QUESTION; ?> seconds</p>
-                        <p>📊 <strong>Total time:</strong> Approximately <?php echo ceil(($quiz['questions_count'] * $TIME_PER_QUESTION) / 60); ?> minutes</p>
+                        <p>⏱️ <strong>Total duration:</strong> <?php echo (int)$quiz['duration_minutes']; ?> minute<?php echo ((int)$quiz['duration_minutes'] === 1) ? '' : 's'; ?></p>
+                        <p>📊 <strong>Avg. time per question:</strong> <?php echo $quiz['questions_count'] > 0 ? round(($quiz['duration_minutes'] * 60) / $quiz['questions_count']) : $SECONDS_PER_QUESTION; ?> seconds</p>
                         <p>🎯 <strong>Passing Score:</strong> <?php echo $quiz['passing_score']; ?>%</p>
                         <form method="POST">
                             <input type="hidden" name="quiz_index" value="<?php echo $index; ?>">
@@ -1362,7 +1519,12 @@ $showAdminPanel = isset($_GET['admin']);
                             </div>
                             <div class="timer" id="timer">
                                 <span>⏱️</span>
-                                <span id="timeDisplay">1:00</span>
+                                <span id="timeDisplay"><?php
+                                    $displayRemaining = isset($_SESSION['start_time'], $_SESSION['quiz_duration_seconds'])
+                                        ? max(0, (int)$_SESSION['quiz_duration_seconds'] - (time() - (int)$_SESSION['start_time']))
+                                        : ((int)($selectedQuiz['duration_minutes'] ?? 1) * 60);
+                                    echo floor($displayRemaining / 60) . ':' . str_pad((string)($displayRemaining % 60), 2, '0', STR_PAD_LEFT);
+                                ?></span>
                             </div>
                         </div>
 
@@ -1396,8 +1558,16 @@ $showAdminPanel = isset($_GET['admin']);
     </div>
 
     <script>
-        // Timer functionality
-        let timeLeft = <?php echo $TIME_PER_QUESTION; ?>;
+        // Total quiz duration timer (counts down across all questions)
+        <?php
+        $remainingSeconds = 0;
+        if (isset($_SESSION['start_time'], $_SESSION['quiz_duration_seconds'])) {
+            $remainingSeconds = max(0, (int)$_SESSION['quiz_duration_seconds'] - (time() - (int)$_SESSION['start_time']));
+        }
+        $warningThreshold = max(30, (int)floor($remainingSeconds * 0.1));
+        ?>
+        let timeLeft = <?php echo (int)$remainingSeconds; ?>;
+        const warningThreshold = <?php echo (int)$warningThreshold; ?>;
         let timerInterval;
 
         function updateTimer() {
@@ -1409,7 +1579,7 @@ $showAdminPanel = isset($_GET['admin']);
             if (timeDisplay) {
                 timeDisplay.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
                 
-                if (timeLeft <= 20) {
+                if (timeLeft <= warningThreshold) {
                     timer.classList.add('warning');
                 } else {
                     timer.classList.remove('warning');
@@ -1419,6 +1589,10 @@ $showAdminPanel = isset($_GET['admin']);
                 
                 if (timeLeft < 0) {
                     clearInterval(timerInterval);
+                    const formAction = document.getElementById('formAction');
+                    if (formAction) {
+                        formAction.value = 'finish_quiz';
+                    }
                     document.getElementById('quizForm').submit();
                 }
             }
