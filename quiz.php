@@ -1752,14 +1752,14 @@ $quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
                                         </td>
                                         <td><?php echo htmlspecialchars($attempt['time_spent'] ?? '-'); ?></td>
                                         <td style="white-space: nowrap;">
-                                            <div style="display: flex; gap: 6px; align-items: center;">
+                                            <div style="display: flex; flex-direction: column; gap: 6px; align-items: stretch;">
                                                 <a href="?admin=1&review=<?php echo urlencode($attempt['id']); ?>" style="text-decoration:none;">
-                                                    <button type="button" class="btn btn-sm">Show Answer Key</button>
+                                                    <button type="button" class="btn btn-sm" style="width: 100%;">Show Answer Key</button>
                                                 </a>
                                                 <form method="POST" action="?admin=1" style="margin: 0;" onsubmit="return confirm(<?php echo htmlspecialchars(json_encode('Delete the result of ' . ($attempt['user_name'] ?? '-') . ' (' . ($attempt['quiz_title'] ?? '-') . ')? This cannot be undone.'), ENT_QUOTES); ?>);">
                                                     <input type="hidden" name="admin_action" value="delete_attempt">
                                                     <input type="hidden" name="attempt_id" value="<?php echo htmlspecialchars($attempt['id'] ?? ''); ?>">
-                                                    <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                                                    <button type="submit" class="btn btn-danger btn-sm" style="width: 100%;">Delete</button>
                                                 </form>
                                             </div>
                                         </td>
