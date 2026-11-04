@@ -2,6 +2,12 @@
 
 session_start();
 
+// Share one admin session with index.php (Admin Authentication).
+if (!empty($_SESSION['admin_authenticated']) || !empty($_SESSION['admin_logged_in'])) {
+    $_SESSION['admin_authenticated'] = true;
+    $_SESSION['admin_logged_in'] = true;
+}
+
 // Configuration
 $ADMIN_EMAIL = "Quiztest@fusion.co.th";
 $QUIZ_MAPPING_FILE = "quiz_mapping.csv";
@@ -493,6 +499,7 @@ if (isset($_POST['admin_action'])) {
         writeLog('INFO', "Admin login attempt");
         if ($_POST['admin_password'] === $ADMIN_PASSWORD) {
             $_SESSION['admin_logged_in'] = true;
+            $_SESSION['admin_authenticated'] = true;
             writeLog('INFO', "Admin login successful");
             header('Location: ' . $_SERVER['PHP_SELF'] . '?admin=1');
             exit;
@@ -669,7 +676,7 @@ if (isset($_POST['admin_action'])) {
         }
     } elseif ($_POST['admin_action'] === 'logout') {
         writeLog('INFO', "Admin logged out");
-        unset($_SESSION['admin_logged_in']);
+        unset($_SESSION['admin_logged_in'], $_SESSION['admin_authenticated']);
         header('Location: ' . $_SERVER['PHP_SELF']);
         exit;
     }

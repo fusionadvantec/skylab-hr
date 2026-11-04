@@ -1,6 +1,12 @@
 <?php
 session_start();
 
+// Share one admin session with quiz.php.
+if (!empty($_SESSION['admin_authenticated']) || !empty($_SESSION['admin_logged_in'])) {
+    $_SESSION['admin_authenticated'] = true;
+    $_SESSION['admin_logged_in'] = true;
+}
+
 // Admin password - Change this to your desired password
 define('ADMIN_PASSWORD', 'IloveFusion@1234');
 
@@ -103,6 +109,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $password = $_POST['password'] ?? '';
             if ($password === ADMIN_PASSWORD) {
                 $_SESSION['admin_authenticated'] = true;
+                $_SESSION['admin_logged_in'] = true;
                 echo json_encode(['success' => true]);
             } else {
                 echo json_encode(['success' => false, 'error' => 'Invalid password']);
@@ -1090,7 +1097,8 @@ $quizData = loadQuizData();
         }
 
         async function openAdminPanel() {
-            if (sessionStorage.getItem('admin_authenticated') === 'true' && await hasAdminSession()) {
+            if (await hasAdminSession()) {
+                sessionStorage.setItem('admin_authenticated', 'true');
                 showAdminPanel();
             } else {
                 promptAdminLogin();
