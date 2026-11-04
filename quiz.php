@@ -1480,6 +1480,36 @@ $quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
             margin-top: 20px;
         }
 
+        .pdpa-page {
+            position: relative;
+        }
+
+        .pdpa-lang {
+            display: flex;
+            justify-content: flex-end;
+            gap: 6px;
+            margin-bottom: 8px;
+        }
+
+        .pdpa-lang .lang-btn {
+            border: 1px solid #667eea;
+            background: transparent;
+            color: #667eea;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            padding: 3px 8px;
+            line-height: 1.4;
+            cursor: pointer;
+        }
+
+        .pdpa-lang .lang-btn.is-active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+            border-color: transparent;
+        }
+
         .pdpa-box {
             background: #f8f9fa;
             border: 2px solid #667eea;
@@ -1767,49 +1797,128 @@ $quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
     <div class="container<?php echo ($showAdminPanel && $adminLoggedIn && !isset($_GET['review']) && !isset($_GET['quiz_edit']) && !isset($_GET['quiz_key'])) ? ' admin-dashboard' : ''; ?>">
         <?php if (!isset($_SESSION['pdpa_accepted'])): ?>
             <!-- PDPA Consent Page -->
-            <h1>🔒 Privacy Notice</h1>
-            <p class="subtitle">Personal Data Protection Act (PDPA) Consent</p>
+            <div class="pdpa-page" id="pdpaPage">
+            <div class="pdpa-lang">
+                <button type="button" class="lang-btn is-active" data-lang="th">TH</button>
+                <button type="button" class="lang-btn" data-lang="en">EN</button>
+            </div>
+            <h1 data-i18n="title"></h1>
+            <p class="subtitle" data-i18n="subtitle"></p>
 
             <div class="pdpa-box">
-                <h3>Collection of Personal Information</h3>
-                <p>
-                    Before you proceed with the quiz, we would like to inform you about how we collect and use your personal information.
-                </p>
+                <h3 data-i18n="collectTitle"></h3>
+                <p data-i18n="intro"></p>
 
-                <h3>What Information We Collect:</h3>
+                <h3 data-i18n="itemsTitle"></h3>
                 <ul>
-                    <li>Name</li>
-                    <li>Email address</li>
-                    <li>IP address of the device used to take the quiz</li>
-                    <li>Photographs of the person taking the quiz</li>
-                    <li>Quiz results and scores</li>
-                    <li>Time spent on the quiz</li>
-                    <li>Answers to quiz questions</li>
+                    <li data-i18n="item1"></li>
+                    <li data-i18n="item2"></li>
+                    <li data-i18n="item3"></li>
+                    <li data-i18n="item4"></li>
+                    <li data-i18n="item5"></li>
+                    <li data-i18n="item6"></li>
+                    <li data-i18n="item7"></li>
                 </ul>
 
-                <h3>How We Use Your Information:</h3>
+                <h3 data-i18n="useTitle"></h3>
                 <ul>
-                    <li>To show your quiz score and answer key after the test</li>
-                    <li>To verify the identity of the person taking the quiz and support quiz integrity</li>
-                    <li>To maintain records of quiz submissions</li>
-                    <li>To improve our quiz content and user experience</li>
-                    <li>For administrative purposes and communication</li>
+                    <li data-i18n="use1"></li>
+                    <li data-i18n="use2"></li>
+                    <li data-i18n="use3"></li>
+                    <li data-i18n="use4"></li>
+                    <li data-i18n="use5"></li>
                 </ul>
 
-                <h3>Data Protection:</h3>
-                <p>
-                    Your personal information will be stored securely and will not be shared with third parties without your consent. 
-                    We are committed to protecting your privacy in accordance with the Personal Data Protection Act.
-                </p>
+                <h3 data-i18n="protectTitle"></h3>
+                <p data-i18n="protect"></p>
 
                 <p style="margin-top: 20px;">
-                    <strong>By clicking "Accept and Continue", you consent to the collection and use of your personal information as described above.</strong>
+                    <strong data-i18n="consent"></strong>
                 </p>
             </div>
 
             <form method="POST">
-                <button type="submit" name="accept_pdpa" class="btn">✓ Accept and Continue</button>
+                <button type="submit" name="accept_pdpa" class="btn" data-i18n="accept"></button>
             </form>
+            <script>
+                (function() {
+                    const page = document.getElementById('pdpaPage');
+                    let lang = 'th';
+                    const copy = {
+                        th: {
+                            title: '🔒 ประกาศความเป็นส่วนตัว',
+                            subtitle: 'ความยินยอมตามพระราชบัญญัติคุ้มครองข้อมูลส่วนบุคคล (PDPA)',
+                            collectTitle: 'การเก็บรวบรวมข้อมูลส่วนบุคคล',
+                            intro: 'ก่อนเริ่มทำข้อสอบ เราขอแจ้งให้ทราบว่ามีการเก็บและใช้ข้อมูลส่วนบุคคลของท่านอย่างไร',
+                            itemsTitle: 'ข้อมูลที่เราเก็บ',
+                            item1: 'ชื่อ',
+                            item2: 'อีเมล',
+                            item3: 'ที่อยู่ IP ของอุปกรณ์ที่ใช้ทำข้อสอบ',
+                            item4: 'รูปถ่ายของผู้เข้าสอบ',
+                            item5: 'ผลการทำข้อสอบและคะแนน',
+                            item6: 'เวลาที่ใช้ทำข้อสอบ',
+                            item7: 'คำตอบของข้อสอบ',
+                            useTitle: 'เราใช้ข้อมูลอย่างไร',
+                            use1: 'เพื่อแสดงคะแนนและเฉลยหลังทำข้อสอบ',
+                            use2: 'เพื่อยืนยันตัวตนของผู้เข้าสอบและรักษาความถูกต้องของข้อสอบ',
+                            use3: 'เพื่อเก็บบันทึกการส่งข้อสอบ',
+                            use4: 'เพื่อปรับปรุงเนื้อหาข้อสอบและประสบการณ์ผู้ใช้',
+                            use5: 'เพื่อการบริหารและการติดต่อสื่อสาร',
+                            protectTitle: 'การคุ้มครองข้อมูล',
+                            protect: 'ข้อมูลส่วนบุคคลจะถูกจัดเก็บอย่างปลอดภัย และจะไม่เปิดเผยแก่บุคคลภายนอกหากไม่ได้รับความยินยอม เรามุ่งมั่นคุ้มครองความเป็นส่วนตัวตามพระราชบัญญัติคุ้มครองข้อมูลส่วนบุคคล',
+                            consent: 'เมื่อกด "ยอมรับและดำเนินการต่อ" ถือว่าท่านยินยอมให้เก็บและใช้ข้อมูลส่วนบุคคลตามที่แจ้งไว้ข้างต้น',
+                            accept: '✓ ยอมรับและดำเนินการต่อ'
+                        },
+                        en: {
+                            title: '🔒 Privacy Notice',
+                            subtitle: 'Personal Data Protection Act (PDPA) Consent',
+                            collectTitle: 'Collection of Personal Information',
+                            intro: 'Before you proceed with the quiz, we would like to inform you about how we collect and use your personal information.',
+                            itemsTitle: 'What Information We Collect:',
+                            item1: 'Name',
+                            item2: 'Email address',
+                            item3: 'IP address of the device used to take the quiz',
+                            item4: 'Photographs of the person taking the quiz',
+                            item5: 'Quiz results and scores',
+                            item6: 'Time spent on the quiz',
+                            item7: 'Answers to quiz questions',
+                            useTitle: 'How We Use Your Information:',
+                            use1: 'To show your quiz score and answer key after the test',
+                            use2: 'To verify the identity of the person taking the quiz and support quiz integrity',
+                            use3: 'To maintain records of quiz submissions',
+                            use4: 'To improve our quiz content and user experience',
+                            use5: 'For administrative purposes and communication',
+                            protectTitle: 'Data Protection:',
+                            protect: 'Your personal information will be stored securely and will not be shared with third parties without your consent. We are committed to protecting your privacy in accordance with the Personal Data Protection Act.',
+                            consent: 'By clicking "Accept and Continue", you consent to the collection and use of your personal information as described above.',
+                            accept: '✓ Accept and Continue'
+                        }
+                    };
+
+                    function applyLanguage() {
+                        const text = copy[lang];
+                        page.querySelectorAll('[data-i18n]').forEach(function(el) {
+                            const key = el.getAttribute('data-i18n');
+                            if (text[key]) el.textContent = text[key];
+                        });
+                        page.querySelectorAll('.lang-btn').forEach(function(btn) {
+                            const active = btn.getAttribute('data-lang') === lang;
+                            btn.classList.toggle('is-active', active);
+                            btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+                        });
+                    }
+
+                    page.querySelectorAll('.lang-btn').forEach(function(btn) {
+                        btn.addEventListener('click', function() {
+                            lang = btn.getAttribute('data-lang') === 'en' ? 'en' : 'th';
+                            applyLanguage();
+                        });
+                    });
+
+                    applyLanguage();
+                })();
+            </script>
+            </div>
 
         <?php elseif ($showAdminPanel): ?>
             <!-- Admin Panel -->
