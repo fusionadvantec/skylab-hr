@@ -161,6 +161,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             echo json_encode(['success' => true, 'data' => $data]);
             break;
             
+        case 'move_category_up':
+            $data = loadQuizData();
+            $categoryId = intval($_POST['category_id'] ?? 0);
+            $index = null;
+            foreach ($data['categories'] as $i => $cat) {
+                if ($cat['id'] == $categoryId) {
+                    $index = $i;
+                    break;
+                }
+            }
+            if ($index === null) {
+                echo json_encode(['success' => false, 'error' => 'Category not found']);
+                break;
+            }
+            if ($index === 0) {
+                echo json_encode(['success' => false, 'error' => 'top']);
+                break;
+            }
+            $previous = $data['categories'][$index - 1];
+            $data['categories'][$index - 1] = $data['categories'][$index];
+            $data['categories'][$index] = $previous;
+            saveQuizData($data);
+            echo json_encode(['success' => true, 'data' => $data]);
+            break;
+
         case 'delete_category':
             $data = loadQuizData();
             $categoryId = intval($_POST['category_id']);
@@ -1325,6 +1350,7 @@ $quizData = loadQuizData();
                     <div class="item-header">
                         <span class="item-title">${category.name}</span>
                         <div class="item-actions">
+                            <button class="btn btn-primary" onclick="moveCategoryUp(${category.id}, ${catIndex})">Move Up</button>
                             <button class="btn btn-warning" onclick="editCategory(${category.id})">Edit</button>
                             <button class="btn btn-success" onclick="showAddQuizForm(${category.id})">+ Add Quiz</button>
                             <button class="btn btn-danger" onclick="deleteCategory(${category.id})">Delete</button>
@@ -1429,6 +1455,33 @@ $quizData = loadQuizData();
                 renderCategoriesAdmin();
                 renderQuizzes();
                 closeEditCategoryModal();
+            }
+        }
+
+        async function moveCategoryUp(categoryId, catIndex) {
+            if (catIndex === 0) {
+                alert('บนสุดแล้วเลื่อนไม่ได้');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('action', 'move_category_up');
+            formData.append('category_id', categoryId);
+
+            const response = await fetch('', {
+                method: 'POST',
+                body: formData
+            });
+            const result = await response.json();
+
+            if (result.success) {
+                quizData = result.data;
+                renderCategoriesAdmin();
+                renderQuizzes();
+            } else if (result.error === 'top') {
+                alert('บนสุดแล้วเลื่อนไม่ได้');
+            } else {
+                alert(result.error || 'Failed to move category');
             }
         }
 
