@@ -57,6 +57,19 @@ function saveQuizAttempt($attempt) {
     return true;
 }
 
+function getClientIp() {
+    $remote = $_SERVER['REMOTE_ADDR'] ?? '';
+    // X-Forwarded-For is client-controlled, so only trust it when the request came through a local proxy.
+    $fromLocalProxy = $remote !== '' && !filter_var($remote, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE);
+    if ($fromLocalProxy && !empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+        $forwarded = trim(explode(',', $_SERVER['HTTP_X_FORWARDED_FOR'])[0]);
+        if (filter_var($forwarded, FILTER_VALIDATE_IP)) {
+            return $forwarded;
+        }
+    }
+    return $remote;
+}
+
 function deleteQuizAttempt($id) {
     global $RESULTS_FILE;
     $attempts = loadQuizAttempts();
@@ -805,6 +818,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
         $attempt = [
             'id' => uniqid('attempt_', true),
             'completed_at' => date('Y-m-d H:i:s'),
+            'ip_address' => getClientIp(),
             'user_name' => $userName,
             'user_email' => $userEmail,
             'quiz_title' => $selectedQuiz['title'],
@@ -1191,6 +1205,12 @@ $quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
             margin-bottom: 10px;
         }
 
+        .no-copy {
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
+        }
+
         .question-card {
             background: #f8f9fa;
             border-radius: 15px;
@@ -1522,6 +1542,7 @@ $quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
                 <ul>
                     <li>Name</li>
                     <li>Email address</li>
+                    <li>IP address of the device used to take the quiz</li>
                     <li>Quiz results and scores</li>
                     <li>Time spent on the quiz</li>
                     <li>Answers to quiz questions</li>
@@ -1728,6 +1749,7 @@ $quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
                                     <th>Score</th>
                                     <th>Status</th>
                                     <th>Time Spent</th>
+                                    <th>IP Address</th>
                                     <th>Answer Key</th>
                                 </tr>
                             </thead>
@@ -1751,6 +1773,7 @@ $quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
                                             </span>
                                         </td>
                                         <td><?php echo htmlspecialchars($attempt['time_spent'] ?? '-'); ?></td>
+                                        <td style="font-family: monospace; font-size: 0.85em;"><?php echo htmlspecialchars($attempt['ip_address'] ?? '-'); ?></td>
                                         <td style="white-space: nowrap;">
                                             <div style="display: flex; flex-direction: column; gap: 6px; align-items: stretch;">
                                                 <a href="?admin=1&review=<?php echo urlencode($attempt['id']); ?>" style="text-decoration:none;">
@@ -2047,7 +2070,7 @@ $quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
             </div>
 
             <?php if ($currentQuestion): ?>
-                <form method="POST" id="quizForm">
+                <form method="POST" id="quizForm" class="no-copy">
                     <input type="hidden" name="current_index" value="<?php echo $currentQuestionIndex; ?>">
                     <input type="hidden" id="formAction" name="action" value="next_question">
 
@@ -2097,6 +2120,17 @@ $quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
     </div>
 
     <script>
+        if (document.getElementById('quizForm')) {
+            ['copy', 'cut', 'contextmenu', 'dragstart', 'selectstart'].forEach(function(type) {
+                document.addEventListener(type, function(e) { e.preventDefault(); });
+            });
+            document.addEventListener('keydown', function(e) {
+                if ((e.ctrlKey || e.metaKey) && ['c', 'a', 's', 'p'].includes(e.key.toLowerCase())) {
+                    e.preventDefault();
+                }
+            });
+        }
+
         // Total quiz duration timer (counts down across all questions)
         <?php
         $remainingSeconds = 0;
