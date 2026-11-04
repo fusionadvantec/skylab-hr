@@ -875,6 +875,8 @@ $quizData = loadQuizData();
                 <h3>📸 View Captures</h3>
                 <div style="display: flex; gap: 10px; flex-wrap: wrap;">
                     <button class="btn btn-primary" onclick="loadCaptures()">Load Captures</button>
+                    <button class="btn btn-primary" onclick="setAllCapturesSelected(true)">Select All</button>
+                    <button class="btn btn-primary" onclick="setAllCapturesSelected(false)">Deselect All</button>
                     <button class="btn btn-danger" onclick="deleteSelectedCaptures()">Delete</button>
                     <button class="btn btn-danger" onclick="deleteAllCaptures()">Delete All</button>
                 </div>
@@ -1664,6 +1666,17 @@ $quizData = loadQuizData();
                     container.appendChild(card);
                 });
             }
+        }
+
+        function setAllCapturesSelected(selected) {
+            const boxes = document.querySelectorAll('.capture-check');
+            if (boxes.length === 0) {
+                alert('Load captures first.');
+                return;
+            }
+            boxes.forEach(box => {
+                box.checked = selected;
+            });
         }
 
         async function deleteSelectedCaptures() {
