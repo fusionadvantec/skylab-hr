@@ -1625,11 +1625,44 @@ $quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
             padding: 28px 28px 22px;
         }
 
+        .quiz-briefing-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 6px;
+        }
+
+        .quiz-briefing-lang {
+            display: flex;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+
+        .lang-btn {
+            border: 1px solid rgba(255, 255, 255, 0.75);
+            background: transparent;
+            color: #fff;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            padding: 3px 8px;
+            line-height: 1.4;
+            cursor: pointer;
+        }
+
+        .lang-btn.is-active {
+            background: #fff;
+            color: #5b4bdb;
+            border-color: #fff;
+        }
+
         .quiz-briefing-kicker {
             font-size: 0.85em;
             letter-spacing: 0.04em;
             opacity: 0.9;
-            margin-bottom: 6px;
+            margin-bottom: 0;
         }
 
         .quiz-briefing-hero h2 {
@@ -2334,38 +2367,44 @@ $quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
             <div class="quiz-briefing" id="quizBriefing" hidden>
                 <div class="quiz-briefing-card" role="dialog" aria-modal="true" aria-labelledby="quizBriefingTitle">
                     <div class="quiz-briefing-hero">
-                        <div class="quiz-briefing-kicker">ก่อนเริ่มทำข้อสอบ</div>
+                        <div class="quiz-briefing-top">
+                            <div class="quiz-briefing-kicker" data-i18n="kicker"></div>
+                            <div class="quiz-briefing-lang">
+                                <button type="button" class="lang-btn is-active" data-lang="th">TH</button>
+                                <button type="button" class="lang-btn" data-lang="en">EN</button>
+                            </div>
+                        </div>
                         <h2 id="quizBriefingTitle"></h2>
-                        <p>กรุณาอ่านและกด OK เพื่อยอมรับก่อนเริ่ม</p>
+                        <p data-i18n="intro"></p>
                     </div>
                     <div class="quiz-briefing-body">
                         <div class="quiz-briefing-stats">
                             <div class="quiz-briefing-stat">
-                                <strong>Multiple choice</strong>
-                                <span>เลือกคำตอบที่ถูกต้อง</span>
+                                <strong data-i18n="choiceTitle"></strong>
+                                <span data-i18n="choiceText"></span>
                             </div>
                             <div class="quiz-briefing-stat">
                                 <strong id="quizBriefingCount"></strong>
-                                <span>จำนวนข้อที่ต้องทำ</span>
+                                <span data-i18n="countText"></span>
                             </div>
                             <div class="quiz-briefing-stat">
                                 <strong id="quizBriefingMinutes"></strong>
-                                <span>เวลาทั้งหมดของข้อสอบ</span>
+                                <span data-i18n="minutesText"></span>
                             </div>
                             <div class="quiz-briefing-stat">
-                                <strong>ทีละ 1 ข้อ</strong>
-                                <span>แสดงคำถามครั้งละหนึ่งข้อ</span>
+                                <strong data-i18n="oneTitle"></strong>
+                                <span data-i18n="oneText"></span>
                             </div>
                         </div>
                         <ul class="quiz-briefing-list">
-                            <li>ข้อสอบจะแสดงทีละหนึ่งข้อ จนกว่าจะตอบครบหรือหมดเวลา</li>
-                            <li>ระบบอาจตรวจจับหน้าจอเป็นระยะเพื่อป้องกันการทุจริต</li>
-                            <li>แนะนำให้เข้าห้องน้ำให้เรียบร้อยก่อนเริ่มทำข้อสอบ</li>
-                            <li class="caution">ห้ามทุจริตโดยใช้ AI ช่วยในการตอบ</li>
-                            <li class="caution">ห้ามคัดลอกข้อสอบออกไปตรวจสอบนอกเบราว์เซอร์</li>
+                            <li data-i18n="rule1"></li>
+                            <li data-i18n="rule2"></li>
+                            <li data-i18n="rule3"></li>
+                            <li class="caution" data-i18n="rule4"></li>
+                            <li class="caution" data-i18n="rule5"></li>
                         </ul>
                         <div class="quiz-briefing-actions">
-                            <button type="button" class="btn btn-outline" id="quizBriefingCancel">กลับ</button>
+                            <button type="button" class="btn btn-outline" id="quizBriefingCancel" data-i18n="back"></button>
                             <button type="button" class="btn" id="quizBriefingOk">OK</button>
                         </div>
                     </div>
@@ -2378,14 +2417,68 @@ $quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
                     const count = document.getElementById('quizBriefingCount');
                     const minutes = document.getElementById('quizBriefingMinutes');
                     let pendingForm = null;
+                    let lang = 'th';
+                    const copy = {
+                        th: {
+                            kicker: 'ก่อนเริ่มทำข้อสอบ',
+                            intro: 'กรุณาอ่านและกด OK เพื่อยอมรับก่อนเริ่ม',
+                            choiceTitle: 'ปรนัย',
+                            choiceText: 'เลือกคำตอบที่ถูกต้อง',
+                            countText: 'จำนวนข้อที่ต้องทำ',
+                            minutesText: 'เวลาทั้งหมดของข้อสอบ',
+                            oneTitle: 'ทีละ 1 ข้อ',
+                            oneText: 'แสดงคำถามครั้งละหนึ่งข้อ',
+                            rule1: 'ข้อสอบจะแสดงทีละหนึ่งข้อ จนกว่าจะตอบครบหรือหมดเวลา',
+                            rule2: 'ระบบอาจตรวจจับหน้าจอเป็นระยะเพื่อป้องกันการทุจริต',
+                            rule3: 'แนะนำให้เข้าห้องน้ำให้เรียบร้อยก่อนเริ่มทำข้อสอบ',
+                            rule4: 'ห้ามทุจริตโดยใช้ AI ช่วยในการตอบ',
+                            rule5: 'ห้ามคัดลอกข้อสอบออกไปตรวจสอบนอกเบราว์เซอร์',
+                            back: 'กลับ'
+                        },
+                        en: {
+                            kicker: 'Before you start',
+                            intro: 'Please read this and press OK to accept before starting',
+                            choiceTitle: 'Multiple choice',
+                            choiceText: 'Choose the correct answer',
+                            countText: 'Questions in this quiz',
+                            minutesText: 'Total time',
+                            oneTitle: 'One at a time',
+                            oneText: 'One question is shown at a time',
+                            rule1: 'The quiz shows one question at a time until you finish or time runs out.',
+                            rule2: 'The system may check the screen periodically to prevent cheating.',
+                            rule3: 'Please use the restroom before you start the quiz.',
+                            rule4: 'Do not use AI to help answer the questions.',
+                            rule5: 'Do not copy the quiz out of the browser to check it.',
+                            back: 'Back'
+                        }
+                    };
+
+                    function applyLanguage() {
+                        const text = copy[lang];
+                        dialog.querySelectorAll('[data-i18n]').forEach(function(el) {
+                            const key = el.getAttribute('data-i18n');
+                            if (text[key]) el.textContent = text[key];
+                        });
+                        dialog.querySelectorAll('.lang-btn').forEach(function(btn) {
+                            const active = btn.getAttribute('data-lang') === lang;
+                            btn.classList.toggle('is-active', active);
+                            btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+                        });
+                        if (!pendingForm) return;
+                        const questionCount = pendingForm.getAttribute('data-questions') || '0';
+                        const duration = pendingForm.getAttribute('data-minutes') || '0';
+                        count.textContent = lang === 'th'
+                            ? questionCount + ' ข้อ'
+                            : questionCount + (questionCount === '1' ? ' question' : ' questions');
+                        minutes.textContent = lang === 'th'
+                            ? duration + ' นาที'
+                            : duration + (duration === '1' ? ' minute' : ' minutes');
+                    }
 
                     function openBriefing(form) {
                         pendingForm = form;
                         title.textContent = form.getAttribute('data-title') || '';
-                        const questionCount = form.getAttribute('data-questions') || '0';
-                        const duration = form.getAttribute('data-minutes') || '0';
-                        count.textContent = questionCount + ' ข้อ';
-                        minutes.textContent = duration + ' นาที';
+                        applyLanguage();
                         dialog.hidden = false;
                         document.getElementById('quizBriefingOk').focus();
                     }
@@ -2394,6 +2487,13 @@ $quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
                         dialog.hidden = true;
                         pendingForm = null;
                     }
+
+                    dialog.querySelectorAll('.lang-btn').forEach(function(btn) {
+                        btn.addEventListener('click', function() {
+                            lang = btn.getAttribute('data-lang') === 'en' ? 'en' : 'th';
+                            applyLanguage();
+                        });
+                    });
 
                     document.querySelectorAll('.quiz-start-form').forEach(function(form) {
                         form.querySelector('.quiz-select-btn').addEventListener('click', function() {
