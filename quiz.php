@@ -894,6 +894,27 @@ $currentQuestionIndex = isset($_SESSION['current_question']) ? $_SESSION['curren
 $currentQuestion = isset($questions[$currentQuestionIndex]) ? $questions[$currentQuestionIndex] : null;
 $showAdminPanel = isset($_GET['admin']);
 $adminLoggedIn = isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'];
+
+if ($showAdminPanel && $adminLoggedIn && isset($_GET['download_quiz'])) {
+    $downloadIndex = (int)$_GET['download_quiz'];
+    $downloadQuizzes = loadQuizMapping($QUIZ_MAPPING_FILE);
+    $downloadName = isset($downloadQuizzes[$downloadIndex]) ? basename($downloadQuizzes[$downloadIndex]['filename']) : '';
+    $quizzesRoot = realpath($QUIZZES_FOLDER);
+    $downloadPath = ($downloadName !== '' && preg_match('/\.csv$/i', $downloadName)) ? realpath($QUIZZES_FOLDER . $downloadName) : false;
+    $insideQuizzes = $downloadPath && $quizzesRoot && strpos($downloadPath, $quizzesRoot . DIRECTORY_SEPARATOR) === 0 && is_file($downloadPath);
+    if (!$insideQuizzes) {
+        http_response_code(404);
+        exit('Quiz file not found.');
+    }
+    writeLog('INFO', "Admin downloaded quiz CSV: $downloadName");
+    header('Content-Type: text/csv; charset=UTF-8');
+    header('Content-Disposition: attachment; filename="' . $downloadName . '"');
+    header('Content-Length: ' . filesize($downloadPath));
+    header('X-Content-Type-Options: nosniff');
+    readfile($downloadPath);
+    exit;
+}
+
 $adminReviewAttempt = null;
 if ($showAdminPanel && $adminLoggedIn && isset($_GET['review'])) {
     $adminReviewAttempt = getQuizAttemptById($_GET['review']);
@@ -951,8 +972,13 @@ $quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
             max-width: 900px;
             width: 100%;
+            min-width: 0;
             padding: 40px;
             animation: slideUp 0.5s ease;
+        }
+
+        .container.admin-dashboard {
+            max-width: 1180px;
         }
 
         @keyframes slideUp {
@@ -1485,12 +1511,38 @@ $quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
             border-radius: 15px;
             padding: 30px;
             margin-top: 20px;
+            max-width: 100%;
+        }
+
+        .admin-table-wrap {
+            width: 100%;
+            max-width: 100%;
+            overflow-x: auto;
+            margin-top: 12px;
         }
 
         .admin-panel table {
             width: 100%;
-            margin-top: 20px;
+            margin-top: 0;
             border-collapse: collapse;
+        }
+
+        .admin-panel table.results-table {
+            min-width: 860px;
+        }
+
+        .admin-panel table.results-table th,
+        .admin-panel table.results-table td {
+            padding: 10px 8px;
+            vertical-align: top;
+            font-size: 0.92em;
+        }
+
+        .results-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            min-width: 132px;
         }
 
         .admin-panel th,
@@ -1675,7 +1727,7 @@ $quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
     </style>
 </head>
 <body>
-    <div class="container">
+    <div class="container<?php echo ($showAdminPanel && $adminLoggedIn && !isset($_GET['review']) && !isset($_GET['quiz_edit']) && !isset($_GET['quiz_key'])) ? ' admin-dashboard' : ''; ?>">
         <?php if (!isset($_SESSION['pdpa_accepted'])): ?>
             <!-- PDPA Consent Page -->
             <h1>🔒 Privacy Notice</h1>
@@ -1947,7 +1999,8 @@ $quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
                         Summary of completed quiz attempts (<?php echo count($quizAttempts); ?> total).
                     </p>
                     <?php if (count($quizAttempts) > 0): ?>
-                        <table>
+                        <div class="admin-table-wrap">
+                        <table class="results-table">
                             <thead>
                                 <tr>
                                     <th>#</th>
@@ -1958,7 +2011,7 @@ $quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
                                     <th>Status</th>
                                     <th>Time Spent</th>
                                     <th>IP Address</th>
-                                    <th>Answer Key</th>
+                                    <th>Action</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -1982,8 +2035,8 @@ $quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
                                         </td>
                                         <td><?php echo htmlspecialchars($attempt['time_spent'] ?? '-'); ?></td>
                                         <td style="font-family: monospace; font-size: 0.85em;"><?php echo htmlspecialchars($attempt['ip_address'] ?? '-'); ?></td>
-                                        <td style="white-space: nowrap;">
-                                            <div style="display: flex; flex-direction: column; gap: 6px; align-items: stretch;">
+                                        <td>
+                                            <div class="results-actions">
                                                 <a href="?admin=1&review=<?php echo urlencode($attempt['id']); ?>" style="text-decoration:none;">
                                                     <button type="button" class="btn btn-sm" style="width: 100%;">Show Answer Key</button>
                                                 </a>
@@ -1998,6 +2051,7 @@ $quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
                                 <?php endforeach; ?>
                             </tbody>
                         </table>
+                        </div>
                     <?php else: ?>
                         <p style="color: #999;">No test results yet.</p>
                     <?php endif; ?>
@@ -2052,6 +2106,7 @@ $quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
                     <p style="color: #666; margin-bottom: 10px;">Edit quiz parameters below and click Save for that row.</p>
                     
                     <?php if (count($availableQuizzes) > 0): ?>
+                        <div class="admin-table-wrap">
                         <table>
                             <thead>
                                 <tr>
@@ -2110,12 +2165,14 @@ $quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
                                                 <a href="?admin=1&quiz_key=<?php echo $index; ?>" style="text-decoration: none;">
                                                     <button type="button" class="btn btn-secondary btn-sm">เฉลย</button>
                                                 </a>
+                                                <a href="?admin=1&download_quiz=<?php echo $index; ?>" class="btn btn-secondary btn-sm" style="text-decoration: none; text-align: center;">Download CSV</a>
                                             </div>
                                         </td>
                                     </tr>
                                 <?php endforeach; ?>
                             </tbody>
                         </table>
+                        </div>
                     <?php else: ?>
                         <p style="margin-top: 20px; color: #999; text-align: center;">No quizzes uploaded yet.</p>
                     <?php endif; ?>
