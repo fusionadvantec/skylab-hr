@@ -1192,6 +1192,13 @@ $quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
             border-left-color: #dc3545;
         }
 
+        #editQuestionsForm,
+        #editQuestionsForm textarea,
+        #editQuestionsForm input {
+            -webkit-user-select: text;
+            user-select: text;
+        }
+
         .edit-question textarea {
             width: 100%;
             padding: 10px;
@@ -1664,7 +1671,10 @@ $quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
                                 <div class="edit-question">
                                     <div class="review-question-header">
                                         <strong class="edit-question-number">Question <?php echo $qi + 1; ?></strong>
-                                        <label class="edit-delete"><input type="checkbox" name="questions[<?php echo $qi; ?>][delete]" value="1"> Delete</label>
+                                        <div style="display: flex; gap: 12px; align-items: center;">
+                                            <button type="button" class="btn btn-secondary btn-sm copy-question-btn">Copy</button>
+                                            <label class="edit-delete"><input type="checkbox" name="questions[<?php echo $qi; ?>][delete]" value="1"> Delete</label>
+                                        </div>
                                     </div>
                                     <textarea name="questions[<?php echo $qi; ?>][question]" rows="2" required><?php echo htmlspecialchars($q['question']); ?></textarea>
                                     <?php for ($oi = 0; $oi < 4; $oi++): ?>
@@ -1681,7 +1691,10 @@ $quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
                             <div class="edit-question">
                                 <div class="review-question-header">
                                     <strong class="edit-question-number">New question</strong>
-                                    <label class="edit-delete"><input type="checkbox" name="questions[__I__][delete]" value="1"> Delete</label>
+                                    <div style="display: flex; gap: 12px; align-items: center;">
+                                        <button type="button" class="btn btn-secondary btn-sm copy-question-btn">Copy</button>
+                                        <label class="edit-delete"><input type="checkbox" name="questions[__I__][delete]" value="1"> Delete</label>
+                                    </div>
                                 </div>
                                 <textarea name="questions[__I__][question]" rows="2" required></textarea>
                                 <?php for ($oi = 0; $oi < 4; $oi++): ?>
@@ -1693,8 +1706,9 @@ $quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
                             </div>
                         </template>
 
-                        <div style="display: flex; gap: 15px; margin-top: 20px;">
+                        <div style="display: flex; gap: 15px; margin-top: 20px; flex-wrap: wrap;">
                             <button type="button" class="btn btn-secondary" id="addQuestionBtn">+ Add Question</button>
+                            <button type="button" class="btn btn-secondary" id="copyAllQuestionsBtn">Copy All</button>
                             <button type="submit" class="btn">💾 Save All Questions</button>
                         </div>
                     </form>
@@ -1703,6 +1717,56 @@ $quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
                             let nextIndex = <?php echo count($adminEditRows); ?>;
                             const list = document.getElementById('questionList');
                             const template = document.getElementById('questionTemplate');
+
+                            function questionText(card) {
+                                const number = card.querySelector('.edit-question-number').textContent.trim();
+                                const question = card.querySelector('textarea').value.trim();
+                                const options = Array.from(card.querySelectorAll('.edit-option')).map(function(row, index) {
+                                    const letter = String.fromCharCode(65 + index);
+                                    const text = row.querySelector('input[type="text"]').value.trim();
+                                    const correct = row.querySelector('input[type="radio"]').checked;
+                                    return letter + '. ' + text + (correct ? '    ← correct' : '');
+                                });
+                                return number + '\n' + question + '\n' + options.join('\n');
+                            }
+
+                            function copyText(text, button) {
+                                const done = function() {
+                                    const original = button.textContent;
+                                    button.textContent = 'Copied';
+                                    setTimeout(function() { button.textContent = original; }, 1200);
+                                };
+                                if (navigator.clipboard && navigator.clipboard.writeText) {
+                                    navigator.clipboard.writeText(text).then(done).catch(function() {
+                                        fallbackCopy(text);
+                                        done();
+                                    });
+                                    return;
+                                }
+                                fallbackCopy(text);
+                                done();
+                            }
+
+                            function fallbackCopy(text) {
+                                const area = document.createElement('textarea');
+                                area.value = text;
+                                document.body.appendChild(area);
+                                area.select();
+                                document.execCommand('copy');
+                                area.remove();
+                            }
+
+                            list.addEventListener('click', function(e) {
+                                const button = e.target.closest('.copy-question-btn');
+                                if (!button) return;
+                                copyText(questionText(button.closest('.edit-question')), button);
+                            });
+
+                            document.getElementById('copyAllQuestionsBtn').addEventListener('click', function() {
+                                const cards = Array.from(list.querySelectorAll('.edit-question'));
+                                copyText(cards.map(questionText).join('\n\n'), this);
+                            });
+
                             document.getElementById('addQuestionBtn').addEventListener('click', function() {
                                 const html = template.innerHTML.replace(/__I__/g, nextIndex++);
                                 list.insertAdjacentHTML('beforeend', html);
