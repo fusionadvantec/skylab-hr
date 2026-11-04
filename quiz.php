@@ -199,6 +199,9 @@ function renderResultsSummaryCard($results) {
     if (!empty($results['timed_out'])) {
         $html .= '<p><strong>Note:</strong> Quiz ended because time ran out.</p>';
     }
+    if (isset($results['leave_count'])) {
+        $html .= '<p><strong>Left page:</strong> ' . (int)$results['leave_count'] . '</p>';
+    }
     if (!empty($results['user_name'])) {
         $html .= '<p><strong>Candidate:</strong> ' . htmlspecialchars($results['user_name']);
         if (!empty($results['user_email'])) {
@@ -758,6 +761,7 @@ if (isset($_POST['select_quiz'])) {
         $_SESSION['quiz_answers'] = [];
         $_SESSION['start_time'] = time();
         $_SESSION['quiz_duration_seconds'] = max(60, (int)$selectedQuiz['duration_minutes'] * 60);
+        $_SESSION['leave_count'] = 0;
         
         writeLog('INFO', "Quiz loaded with " . count($_SESSION['quiz_questions']) . " questions, duration={$selectedQuiz['duration_minutes']}m");
         header('Location: ' . $_SERVER['PHP_SELF']);
@@ -777,6 +781,7 @@ if (isset($_GET['select_another'])) {
     unset($_SESSION['start_time']);
     unset($_SESSION['quiz_duration_seconds']);
     unset($_SESSION['quiz_results']);
+    unset($_SESSION['leave_count']);
     header('Location: ' . $_SERVER['PHP_SELF']);
     exit;
 }
@@ -795,6 +800,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
     $answer = isset($_POST["answer"]) ? (int)$_POST["answer"] : -1;
     
     writeLog('DEBUG', "Navigation: action={$_POST['action']}, question=$currentIndex, answer=$answer");
+
+    $postedLeaveCount = max(0, (int)($_POST['leave_count'] ?? 0));
+    $_SESSION['leave_count'] = max((int)($_SESSION['leave_count'] ?? 0), $postedLeaveCount);
     
     if (!isset($_SESSION['quiz_answers'])) {
         $_SESSION['quiz_answers'] = [];
@@ -859,6 +867,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
             'time_spent_seconds' => $timeSpentSeconds,
             'time_spent' => formatTimeSpent($timeSpentSeconds),
             'timed_out' => !empty($timeExpired),
+            'leave_count' => (int)($_SESSION['leave_count'] ?? 0),
             'answers' => $normalizedAnswers,
             'questions' => $questions
         ];
@@ -2156,6 +2165,7 @@ $quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
                                     <th>Score</th>
                                     <th>Status</th>
                                     <th>Time Spent</th>
+                                    <th>Left Page</th>
                                     <th>IP Address</th>
                                     <th>Action</th>
                                 </tr>
@@ -2180,6 +2190,7 @@ $quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
                                             </span>
                                         </td>
                                         <td><?php echo htmlspecialchars($attempt['time_spent'] ?? '-'); ?></td>
+                                        <td><?php echo isset($attempt['leave_count']) ? (int)$attempt['leave_count'] : '-'; ?></td>
                                         <td style="font-family: monospace; font-size: 0.85em;"><?php echo htmlspecialchars($attempt['ip_address'] ?? '-'); ?></td>
                                         <td>
                                             <div class="results-actions">
@@ -2644,10 +2655,15 @@ $quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
                 <div class="progress-fill" id="progressBar" style="width: <?php echo ($currentQuestionIndex / count($questions)) * 100; ?>%"></div>
             </div>
 
+            <div style="display: flex; justify-content: flex-end; margin: 12px 0;">
+                <button type="button" class="btn btn-sm" id="enterFullscreen">เต็มจอ</button>
+            </div>
+
             <?php if ($currentQuestion): ?>
                 <form method="POST" id="quizForm" class="no-copy">
                     <input type="hidden" name="current_index" value="<?php echo $currentQuestionIndex; ?>">
                     <input type="hidden" id="formAction" name="action" value="next_question">
+                    <input type="hidden" id="leaveCountInput" name="leave_count" value="0">
 
                     <div class="question-card">
                         <div class="question-header">
@@ -2690,6 +2706,18 @@ $quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
                         </button>
                     </div>
                 </form>
+                <div class="quiz-briefing" id="leaveWarning" hidden>
+                    <div class="quiz-briefing-card" role="dialog" aria-modal="true" aria-labelledby="leaveWarningTitle">
+                        <div class="quiz-briefing-hero">
+                            <div class="quiz-briefing-kicker">ข้อสอบกำลังดำเนินอยู่</div>
+                            <h2 id="leaveWarningTitle">ไม่อนุญาตให้ออกจากการสอบ</h2>
+                        </div>
+                        <div class="quiz-briefing-body">
+                            <p id="leaveWarningText" style="color: #333; line-height: 1.5; margin-bottom: 16px;"></p>
+                            <button type="button" class="btn" id="leaveWarningOk">OK</button>
+                        </div>
+                    </div>
+                </div>
             <?php endif; ?>
         <?php endif; ?>
     </div>
@@ -2703,6 +2731,96 @@ $quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
                 if ((e.ctrlKey || e.metaKey) && ['c', 'a', 's', 'p'].includes(e.key.toLowerCase())) {
                     e.preventDefault();
                 }
+            });
+
+            const quizSessionId = '<?php echo isset($_SESSION['start_time']) ? (int)$_SESSION['start_time'] : 0; ?>';
+            const storageKey = 'quiz_leave_count';
+            const sessionKey = 'quiz_leave_session';
+            if (sessionStorage.getItem(sessionKey) !== quizSessionId) {
+                sessionStorage.setItem(sessionKey, quizSessionId);
+                sessionStorage.setItem(storageKey, '0');
+            }
+            let leaveCount = parseInt(sessionStorage.getItem(storageKey) || '0', 10) || 0;
+            let away = false;
+            let seenFocus = document.hasFocus();
+            let armed = false;
+            let lastCountedAt = 0;
+            let fullscreenActive = !!(document.fullscreenElement || document.webkitFullscreenElement);
+            const leaveInput = document.getElementById('leaveCountInput');
+            const warning = document.getElementById('leaveWarning');
+            const warningText = document.getElementById('leaveWarningText');
+            const fullscreenButton = document.getElementById('enterFullscreen');
+
+            function syncLeaveCount() {
+                sessionStorage.setItem(storageKey, String(leaveCount));
+                if (leaveInput) leaveInput.value = String(leaveCount);
+            }
+            syncLeaveCount();
+
+            function countLeave() {
+                const now = Date.now();
+                if (now - lastCountedAt < 800) return;
+                lastCountedAt = now;
+                leaveCount += 1;
+                syncLeaveCount();
+            }
+
+            function showLeaveWarning() {
+                if (!warning || !warningText) return;
+                warningText.textContent = 'ระบบบันทึกว่าออกจากหน้าข้อสอบแล้ว ' + leaveCount + ' ครั้ง';
+                warning.hidden = false;
+            }
+
+            function markAway() {
+                if (!armed || !seenFocus || away) return;
+                away = true;
+                countLeave();
+            }
+
+            function markBack() {
+                if (!away || document.hidden) return;
+                away = false;
+                showLeaveWarning();
+            }
+
+            setTimeout(function() { armed = true; }, 1000);
+            document.addEventListener('visibilitychange', function() {
+                if (document.hidden) markAway();
+                else markBack();
+            });
+            window.addEventListener('blur', markAway);
+            window.addEventListener('focus', function() {
+                seenFocus = true;
+                markBack();
+            });
+
+            function updateFullscreenButton() {
+                if (!fullscreenButton) return;
+                fullscreenButton.textContent = fullscreenActive ? 'อยู่ในเต็มจอ' : 'เต็มจอ';
+            }
+            function onFullscreenChange() {
+                const active = !!(document.fullscreenElement || document.webkitFullscreenElement);
+                if (fullscreenActive && !active) {
+                    countLeave();
+                    showLeaveWarning();
+                }
+                fullscreenActive = active;
+                updateFullscreenButton();
+            }
+            updateFullscreenButton();
+
+            if (fullscreenButton) {
+                fullscreenButton.addEventListener('click', function() {
+                    const element = document.documentElement;
+                    const request = element.requestFullscreen || element.webkitRequestFullscreen;
+                    if (request) request.call(element);
+                });
+            }
+            document.addEventListener('fullscreenchange', onFullscreenChange);
+            document.addEventListener('webkitfullscreenchange', onFullscreenChange);
+
+            document.getElementById('leaveWarningOk').addEventListener('click', function() {
+                warning.hidden = true;
             });
         }
 
