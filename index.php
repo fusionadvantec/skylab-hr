@@ -64,6 +64,25 @@ function loadQuizData() {
     return $data ? json_decode($data, true) : $defaultQuizData;
 }
 
+function listCaptureFiles($uploadDir) {
+    $files = [];
+    foreach (glob($uploadDir . '*.{png,jpg,jpeg,PNG,JPG,JPEG}', GLOB_BRACE) ?: [] as $filepath) {
+        if (is_file($filepath)) {
+            $files[] = $filepath;
+        }
+    }
+    return $files;
+}
+
+function captureFilePath($uploadDir, $filename) {
+    $base = basename((string)$filename);
+    if (!preg_match('/\.(png|jpe?g)$/i', $base)) {
+        return null;
+    }
+    $filepath = $uploadDir . $base;
+    return is_file($filepath) ? $filepath : null;
+}
+
 // Save quiz data
 function saveQuizData($data) {
     global $quizDataFile;
@@ -218,14 +237,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             break;
             
         case 'delete_image':
-            $filename = $_POST['filename'];
-            $filepath = $uploadDir . basename($filename);
-            if (file_exists($filepath)) {
-                unlink($filepath);
+            if (empty($_SESSION['admin_authenticated'])) {
+                echo json_encode(['success' => false, 'error' => 'Admin login required']);
+                break;
+            }
+            $filepath = captureFilePath($uploadDir, $_POST['filename'] ?? '');
+            if ($filepath && unlink($filepath)) {
                 echo json_encode(['success' => true]);
             } else {
                 echo json_encode(['success' => false, 'error' => 'File not found']);
             }
+            break;
+
+        case 'delete_captures':
+            if (empty($_SESSION['admin_authenticated'])) {
+                echo json_encode(['success' => false, 'error' => 'Admin login required']);
+                break;
+            }
+            $filenames = $_POST['filenames'] ?? [];
+            if (!is_array($filenames) || count($filenames) === 0) {
+                echo json_encode(['success' => false, 'error' => 'No captures selected']);
+                break;
+            }
+            $deleted = 0;
+            foreach ($filenames as $filename) {
+                $filepath = captureFilePath($uploadDir, $filename);
+                if ($filepath && unlink($filepath)) {
+                    $deleted++;
+                }
+            }
+            echo json_encode(['success' => true, 'deleted' => $deleted]);
+            break;
+
+        case 'delete_all_captures':
+            if (empty($_SESSION['admin_authenticated'])) {
+                echo json_encode(['success' => false, 'error' => 'Admin login required']);
+                break;
+            }
+            $deleted = 0;
+            foreach (listCaptureFiles($uploadDir) as $filepath) {
+                if (unlink($filepath)) {
+                    $deleted++;
+                }
+            }
+            echo json_encode(['success' => true, 'deleted' => $deleted]);
             break;
     }
     exit;
@@ -602,11 +657,22 @@ $quizData = loadQuizData();
         }
 
         .image-card {
+            position: relative;
             background: #f8f9fa;
             border-radius: 10px;
             overflow: hidden;
             box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
             transition: transform 0.3s ease;
+        }
+
+        .capture-check {
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            z-index: 2;
+            width: 22px;
+            height: 22px;
+            cursor: pointer;
         }
 
         .image-card:hover {
@@ -782,7 +848,11 @@ $quizData = loadQuizData();
             <!-- Captures Viewer -->
             <div class="admin-section">
                 <h3>📸 View Captures</h3>
-                <button class="btn btn-primary" onclick="loadCaptures()">Load Captures</button>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button class="btn btn-primary" onclick="loadCaptures()">Load Captures</button>
+                    <button class="btn btn-danger" onclick="deleteSelectedCaptures()">Delete</button>
+                    <button class="btn btn-danger" onclick="deleteAllCaptures()">Delete All</button>
+                </div>
                 <div id="capturesGrid" class="image-grid"></div>
             </div>
         </div>
@@ -1511,16 +1581,74 @@ $quizData = loadQuizData();
                 result.images.forEach(image => {
                     const card = document.createElement('div');
                     card.className = 'image-card';
-                    card.innerHTML = `
-                        <img src="${image.path}" alt="${image.name}">
-                        <div class="image-info">
-                            <div class="image-name">${image.name}</div>
-                            <div class="image-date">${image.date}</div>
-                            <button class="btn btn-danger" style="width: 100%;" onclick="deleteImage('${image.name}')">Delete</button>
-                        </div>
-                    `;
+
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.className = 'capture-check';
+                    checkbox.value = image.name;
+                    checkbox.title = 'Select capture';
+
+                    const img = document.createElement('img');
+                    img.src = image.path;
+                    img.alt = image.name;
+
+                    const info = document.createElement('div');
+                    info.className = 'image-info';
+                    const name = document.createElement('div');
+                    name.className = 'image-name';
+                    name.textContent = image.name;
+                    const date = document.createElement('div');
+                    date.className = 'image-date';
+                    date.textContent = image.date;
+                    const button = document.createElement('button');
+                    button.className = 'btn btn-danger';
+                    button.style.width = '100%';
+                    button.textContent = 'Delete';
+                    button.addEventListener('click', () => deleteImage(image.name));
+                    info.append(name, date, button);
+
+                    card.append(checkbox, img, info);
                     container.appendChild(card);
                 });
+            }
+        }
+
+        async function deleteSelectedCaptures() {
+            const filenames = [...document.querySelectorAll('.capture-check:checked')].map(box => box.value);
+            if (filenames.length === 0) {
+                alert('Select at least one capture.');
+                return;
+            }
+            if (!confirm(`Delete ${filenames.length} selected capture(s)? This cannot be undone.`)) {
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('action', 'delete_captures');
+            filenames.forEach(filename => formData.append('filenames[]', filename));
+
+            const response = await fetch('', { method: 'POST', body: formData });
+            const result = await response.json();
+            if (result.success) {
+                loadCaptures();
+            } else {
+                alert(result.error || 'Failed to delete selected captures.');
+            }
+        }
+
+        async function deleteAllCaptures() {
+            if (!confirm('Delete ALL captures? This cannot be undone.')) {
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('action', 'delete_all_captures');
+            const response = await fetch('', { method: 'POST', body: formData });
+            const result = await response.json();
+            if (result.success) {
+                loadCaptures();
+            } else {
+                alert(result.error || 'Failed to delete captures.');
             }
         }
 
