@@ -664,6 +664,27 @@ if (isset($_POST['admin_action'])) {
                 }
             }
         }
+    } elseif ($_POST['admin_action'] === 'move_quiz_up') {
+        if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in']) {
+            $quizIndex = (int)($_POST['quiz_index'] ?? -1);
+            $quizzes = loadQuizMapping($QUIZ_MAPPING_FILE);
+            if (!isset($quizzes[$quizIndex])) {
+                $upload_error = "Quiz not found.";
+            } elseif ($quizIndex === 0) {
+                $upload_error = "บนสุดแล้ว เลื่อนไม่ได้";
+            } else {
+                $previous = $quizzes[$quizIndex - 1];
+                $quizzes[$quizIndex - 1] = $quizzes[$quizIndex];
+                $quizzes[$quizIndex] = $previous;
+                if (writeAllQuizMappings($QUIZ_MAPPING_FILE, $quizzes)) {
+                    $movedTitle = $quizzes[$quizIndex - 1]['title'];
+                    $upload_success = "Moved '$movedTitle' up.";
+                    writeLog('INFO', "Admin moved quiz up: index $quizIndex -> " . ($quizIndex - 1) . " ($movedTitle)");
+                } else {
+                    $upload_error = "Failed to save quiz order.";
+                }
+            }
+        }
     } elseif ($_POST['admin_action'] === 'delete_attempt') {
         if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in']) {
             $attemptId = (string)($_POST['attempt_id'] ?? '');
@@ -1885,6 +1906,15 @@ $quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
                                         </td>
                                         <td style="white-space: nowrap;">
                                             <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+                                                <?php if ($index === 0): ?>
+                                                    <button type="button" class="btn btn-sm" onclick="alert('บนสุดแล้ว เลื่อนไม่ได้')">Move Up</button>
+                                                <?php else: ?>
+                                                    <form method="POST" action="?admin=1" style="margin: 0;">
+                                                        <input type="hidden" name="admin_action" value="move_quiz_up">
+                                                        <input type="hidden" name="quiz_index" value="<?php echo $index; ?>">
+                                                        <button type="submit" class="btn btn-sm">Move Up</button>
+                                                    </form>
+                                                <?php endif; ?>
                                                 <form id="<?php echo $formId; ?>" method="POST" style="margin: 0;">
                                                     <input type="hidden" name="admin_action" value="update_quiz">
                                                     <input type="hidden" name="quiz_index" value="<?php echo $index; ?>">
