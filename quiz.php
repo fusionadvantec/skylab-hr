@@ -907,11 +907,15 @@ if ($showAdminPanel && $adminLoggedIn && isset($_GET['download_quiz'])) {
         exit('Quiz file not found.');
     }
     writeLog('INFO', "Admin downloaded quiz CSV: $downloadName");
+    $csvBody = file_get_contents($downloadPath);
+    if (strncmp($csvBody, "\xEF\xBB\xBF", 3) !== 0) {
+        $csvBody = "\xEF\xBB\xBF" . $csvBody;
+    }
     header('Content-Type: text/csv; charset=UTF-8');
     header('Content-Disposition: attachment; filename="' . $downloadName . '"');
-    header('Content-Length: ' . filesize($downloadPath));
+    header('Content-Length: ' . strlen($csvBody));
     header('X-Content-Type-Options: nosniff');
-    readfile($downloadPath);
+    echo $csvBody;
     exit;
 }
 
