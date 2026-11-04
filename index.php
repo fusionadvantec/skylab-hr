@@ -108,6 +108,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 echo json_encode(['success' => false, 'error' => 'Invalid password']);
             }
             break;
+
+        case 'admin_session_status':
+            echo json_encode(['success' => true, 'authenticated' => !empty($_SESSION['admin_authenticated'])]);
+            break;
             
         case 'save_image':
             $imageData = $_POST['image'];
@@ -1066,15 +1070,27 @@ $quizData = loadQuizData();
         }
 
         // Admin password functions
-        function openAdminPanel() {
-            // Check if already authenticated in this session
-            if (sessionStorage.getItem('admin_authenticated') === 'true') {
+        async function hasAdminSession() {
+            const formData = new FormData();
+            formData.append('action', 'admin_session_status');
+            const response = await fetch('', { method: 'POST', body: formData });
+            const result = await response.json();
+            return result.authenticated === true;
+        }
+
+        function promptAdminLogin() {
+            sessionStorage.removeItem('admin_authenticated');
+            document.getElementById('adminPasswordModal').style.display = 'block';
+            document.getElementById('adminPasswordInput').value = '';
+            document.getElementById('passwordError').style.display = 'none';
+            document.getElementById('adminPasswordInput').focus();
+        }
+
+        async function openAdminPanel() {
+            if (sessionStorage.getItem('admin_authenticated') === 'true' && await hasAdminSession()) {
                 showAdminPanel();
             } else {
-                document.getElementById('adminPasswordModal').style.display = 'block';
-                document.getElementById('adminPasswordInput').value = '';
-                document.getElementById('passwordError').style.display = 'none';
-                document.getElementById('adminPasswordInput').focus();
+                promptAdminLogin();
             }
         }
 
@@ -1697,6 +1713,9 @@ $quizData = loadQuizData();
             const result = await response.json();
             if (result.success) {
                 loadCaptures();
+            } else if (result.error === 'Admin login required') {
+                alert('Admin login required. Please enter the admin password again.');
+                promptAdminLogin();
             } else {
                 alert(result.error || 'Failed to delete selected captures.');
             }
@@ -1713,6 +1732,9 @@ $quizData = loadQuizData();
             const result = await response.json();
             if (result.success) {
                 loadCaptures();
+            } else if (result.error === 'Admin login required') {
+                alert('Admin login required. Please enter the admin password again.');
+                promptAdminLogin();
             } else {
                 alert(result.error || 'Failed to delete captures.');
             }
@@ -1735,6 +1757,9 @@ $quizData = loadQuizData();
             
             if (result.success) {
                 loadCaptures();
+            } else if (result.error === 'Admin login required') {
+                alert('Admin login required. Please enter the admin password again.');
+                promptAdminLogin();
             }
         }
 
