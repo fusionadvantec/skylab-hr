@@ -1537,6 +1537,120 @@ $quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
             width: 100%;
         }
 
+        .quiz-briefing {
+            position: fixed;
+            inset: 0;
+            z-index: 50;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            background: rgba(45, 27, 105, 0.55);
+            backdrop-filter: blur(6px);
+        }
+
+        .quiz-briefing[hidden] {
+            display: none;
+        }
+
+        .quiz-briefing-card {
+            width: min(520px, 100%);
+            max-height: calc(100vh - 40px);
+            overflow: auto;
+            background: #fff;
+            border-radius: 22px;
+            box-shadow: 0 24px 60px rgba(45, 27, 105, 0.35);
+            animation: slideUp 0.35s ease;
+        }
+
+        .quiz-briefing-hero {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+            padding: 28px 28px 22px;
+        }
+
+        .quiz-briefing-kicker {
+            font-size: 0.85em;
+            letter-spacing: 0.04em;
+            opacity: 0.9;
+            margin-bottom: 6px;
+        }
+
+        .quiz-briefing-hero h2 {
+            color: #fff;
+            text-align: left;
+            font-size: 1.55em;
+            margin: 0 0 6px;
+        }
+
+        .quiz-briefing-hero p {
+            opacity: 0.92;
+            margin: 0;
+        }
+
+        .quiz-briefing-body {
+            padding: 22px 28px 26px;
+        }
+
+        .quiz-briefing-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 18px;
+        }
+
+        .quiz-briefing-stat {
+            background: #f4f1ff;
+            border: 1px solid #e3dcff;
+            border-radius: 14px;
+            padding: 12px 14px;
+        }
+
+        .quiz-briefing-stat strong {
+            display: block;
+            color: #5b4bdb;
+            font-size: 1.15em;
+        }
+
+        .quiz-briefing-stat span {
+            color: #666;
+            font-size: 0.85em;
+        }
+
+        .quiz-briefing-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 18px;
+        }
+
+        .quiz-briefing-list li {
+            background: #f8f9fc;
+            border-radius: 12px;
+            padding: 10px 12px;
+            color: #333;
+            line-height: 1.45;
+        }
+
+        .quiz-briefing-list li.caution {
+            background: #f7f1ff;
+            color: #4c3478;
+        }
+
+        .quiz-briefing-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .quiz-briefing-actions .btn {
+            margin-top: 0;
+        }
+
+        .quiz-briefing-actions .btn-outline {
+            width: 38%;
+        }
+
         @media (max-width: 600px) {
             .container {
                 padding: 20px;
@@ -2145,15 +2259,103 @@ $quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
                         <p>⏱️ <strong>Total duration:</strong> <?php echo (int)$quiz['duration_minutes']; ?> minute<?php echo ((int)$quiz['duration_minutes'] === 1) ? '' : 's'; ?></p>
                         <p>📊 <strong>Avg. time per question:</strong> <?php echo $quiz['questions_count'] > 0 ? round(($quiz['duration_minutes'] * 60) / $quiz['questions_count']) : $SECONDS_PER_QUESTION; ?> seconds</p>
                         <p>🎯 <strong>Passing Score:</strong> <?php echo $quiz['passing_score']; ?>%</p>
-                        <form method="POST">
+                        <form method="POST" class="quiz-start-form" data-title="<?php echo htmlspecialchars($quiz['title']); ?>" data-questions="<?php echo (int)$quiz['questions_count']; ?>" data-minutes="<?php echo (int)$quiz['duration_minutes']; ?>">
                             <input type="hidden" name="quiz_index" value="<?php echo $index; ?>">
-                            <button type="submit" name="select_quiz" class="btn quiz-select-btn">Start This Quiz →</button>
+                            <input type="hidden" name="select_quiz" value="1">
+                            <button type="button" class="btn quiz-select-btn">Start This Quiz →</button>
                         </form>
                     </div>
                 <?php endforeach; ?>
             <?php else: ?>
                 <div class="error">No quizzes available. Please contact the administrator.</div>
             <?php endif; ?>
+
+            <div class="quiz-briefing" id="quizBriefing" hidden>
+                <div class="quiz-briefing-card" role="dialog" aria-modal="true" aria-labelledby="quizBriefingTitle">
+                    <div class="quiz-briefing-hero">
+                        <div class="quiz-briefing-kicker">ก่อนเริ่มทำข้อสอบ</div>
+                        <h2 id="quizBriefingTitle"></h2>
+                        <p>กรุณาอ่านและกด OK เพื่อยอมรับก่อนเริ่ม</p>
+                    </div>
+                    <div class="quiz-briefing-body">
+                        <div class="quiz-briefing-stats">
+                            <div class="quiz-briefing-stat">
+                                <strong>Multiple choice</strong>
+                                <span>เลือกคำตอบที่ถูกต้อง</span>
+                            </div>
+                            <div class="quiz-briefing-stat">
+                                <strong id="quizBriefingCount"></strong>
+                                <span>จำนวนข้อที่ต้องทำ</span>
+                            </div>
+                            <div class="quiz-briefing-stat">
+                                <strong id="quizBriefingMinutes"></strong>
+                                <span>เวลาทั้งหมดของข้อสอบ</span>
+                            </div>
+                            <div class="quiz-briefing-stat">
+                                <strong>ทีละ 1 ข้อ</strong>
+                                <span>แสดงคำถามครั้งละหนึ่งข้อ</span>
+                            </div>
+                        </div>
+                        <ul class="quiz-briefing-list">
+                            <li>ข้อสอบจะแสดงทีละหนึ่งข้อ จนกว่าจะตอบครบหรือหมดเวลา</li>
+                            <li>ระบบอาจตรวจจับหน้าจอเป็นระยะเพื่อป้องกันการทุจริต</li>
+                            <li>แนะนำให้เข้าห้องน้ำให้เรียบร้อยก่อนเริ่มทำข้อสอบ</li>
+                            <li class="caution">ห้ามทุจริตโดยใช้ AI ช่วยในการตอบ</li>
+                            <li class="caution">ห้ามคัดลอกข้อสอบออกไปตรวจสอบนอกเบราว์เซอร์</li>
+                        </ul>
+                        <div class="quiz-briefing-actions">
+                            <button type="button" class="btn btn-outline" id="quizBriefingCancel">กลับ</button>
+                            <button type="button" class="btn" id="quizBriefingOk">OK</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <script>
+                (function() {
+                    const dialog = document.getElementById('quizBriefing');
+                    const title = document.getElementById('quizBriefingTitle');
+                    const count = document.getElementById('quizBriefingCount');
+                    const minutes = document.getElementById('quizBriefingMinutes');
+                    let pendingForm = null;
+
+                    function openBriefing(form) {
+                        pendingForm = form;
+                        title.textContent = form.getAttribute('data-title') || '';
+                        const questionCount = form.getAttribute('data-questions') || '0';
+                        const duration = form.getAttribute('data-minutes') || '0';
+                        count.textContent = questionCount + ' ข้อ';
+                        minutes.textContent = duration + ' นาที';
+                        dialog.hidden = false;
+                        document.getElementById('quizBriefingOk').focus();
+                    }
+
+                    function closeBriefing() {
+                        dialog.hidden = true;
+                        pendingForm = null;
+                    }
+
+                    document.querySelectorAll('.quiz-start-form').forEach(function(form) {
+                        form.querySelector('.quiz-select-btn').addEventListener('click', function() {
+                            openBriefing(form);
+                        });
+                    });
+
+                    document.getElementById('quizBriefingOk').addEventListener('click', function() {
+                        if (!pendingForm) return;
+                        const form = pendingForm;
+                        pendingForm = null;
+                        form.submit();
+                    });
+
+                    document.getElementById('quizBriefingCancel').addEventListener('click', closeBriefing);
+                    dialog.addEventListener('click', function(event) {
+                        if (event.target === dialog) closeBriefing();
+                    });
+                    document.addEventListener('keydown', function(event) {
+                        if (event.key === 'Escape' && !dialog.hidden) closeBriefing();
+                    });
+                })();
+            </script>
 
         <?php else: ?>
             <!-- Quiz Page - One Question at a Time -->
