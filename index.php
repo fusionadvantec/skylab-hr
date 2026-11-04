@@ -249,20 +249,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             
         case 'get_captures':
             $images = [];
+            $totalBytes = 0;
             if (is_dir($uploadDir)) {
                 $files = scandir($uploadDir);
                 foreach ($files as $file) {
                     if (preg_match('/\.(png|jpg|jpeg)$/i', $file)) {
+                        $size = filesize($uploadDir . $file);
+                        $totalBytes += $size;
                         $images[] = [
                             'name' => $file,
                             'path' => $uploadDir . $file,
-                            'size' => filesize($uploadDir . $file),
+                            'size' => $size,
                             'date' => date('Y-m-d H:i:s', filemtime($uploadDir . $file))
                         ];
                     }
                 }
             }
-            echo json_encode(['success' => true, 'images' => $images]);
+            echo json_encode(['success' => true, 'images' => $images, 'total_bytes' => $totalBytes]);
             break;
             
         case 'delete_image':
@@ -876,7 +879,7 @@ $quizData = loadQuizData();
 
             <!-- Captures Viewer -->
             <div class="admin-section">
-                <h3>📸 View Captures</h3>
+                <h3>📸 View Captures <span id="capturesSize" style="font-size: 0.85em; font-weight: 600; color: #555;"></span></h3>
                 <div style="display: flex; gap: 10px; flex-wrap: wrap;">
                     <button class="btn btn-primary" onclick="loadCaptures()">Load Captures</button>
                     <button class="btn btn-primary" onclick="setAllCapturesSelected(true)">Select All</button>
@@ -1138,6 +1141,7 @@ $quizData = loadQuizData();
         function showAdminPanel() {
             document.getElementById('adminModal').style.display = 'block';
             loadCategoriesAdmin();
+            refreshCaptureSize();
         }
 
         // Load quiz data and render
@@ -1632,6 +1636,25 @@ $quizData = loadQuizData();
             }
         }
 
+        function renderCaptureSize(totalBytes) {
+            const label = document.getElementById('capturesSize');
+            if (!label) return;
+            const megabytes = (Number(totalBytes) || 0) / (1024 * 1024);
+            label.textContent = `(${megabytes.toFixed(2)} MB)`;
+        }
+
+        async function refreshCaptureSize() {
+            const response = await fetch('', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'action=get_captures'
+            });
+            const result = await response.json();
+            if (result.success) {
+                renderCaptureSize(result.total_bytes);
+            }
+        }
+
         async function loadCaptures() {
             const response = await fetch('', {
                 method: 'POST',
@@ -1643,6 +1666,7 @@ $quizData = loadQuizData();
             if (result.success) {
                 const container = document.getElementById('capturesGrid');
                 container.innerHTML = '';
+                renderCaptureSize(result.total_bytes);
                 
                 if (result.images.length === 0) {
                     container.innerHTML = '<p style="padding: 20px; text-align: center; color: #666;">No captures found</p>';
