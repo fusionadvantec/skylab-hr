@@ -961,7 +961,7 @@ $quizData = loadQuizData();
                     We respect your privacy and are committed to protecting your personal data. By using this quiz proctoring system, you consent to the collection and processing of the following information:
                 </p>
                 <ul style="margin-left: 30px; margin-bottom: 15px; line-height: 1.8; color: #555;">
-                    <li>Webcam photographs captured during quiz sessions</li>
+                    <li>Photographs of the person taking the quiz, captured from the webcam during the quiz session</li>
                     <li>Quiz participation records and timestamps</li>
                     <li>System-generated user identifiers</li>
                     <li>Activity monitoring data for academic integrity purposes</li>

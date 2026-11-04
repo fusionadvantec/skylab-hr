@@ -1543,6 +1543,7 @@ $quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
                     <li>Name</li>
                     <li>Email address</li>
                     <li>IP address of the device used to take the quiz</li>
+                    <li>Photographs of the person taking the quiz</li>
                     <li>Quiz results and scores</li>
                     <li>Time spent on the quiz</li>
                     <li>Answers to quiz questions</li>
@@ -1551,6 +1552,7 @@ $quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
                 <h3>How We Use Your Information:</h3>
                 <ul>
                     <li>To show your quiz score and answer key after the test</li>
+                    <li>To verify the identity of the person taking the quiz and support quiz integrity</li>
                     <li>To maintain records of quiz submissions</li>
                     <li>To improve our quiz content and user experience</li>
                     <li>For administrative purposes and communication</li>
