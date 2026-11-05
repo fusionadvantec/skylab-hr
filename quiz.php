@@ -182,6 +182,13 @@ function renderAnswerReview($questions, $answers = null) {
     return $html;
 }
 
+function quizSettingShowsAnswers($quiz) {
+    if (!is_array($quiz) || !array_key_exists('show_answers', $quiz) || $quiz['show_answers'] === '') {
+        return 1;
+    }
+    return !empty($quiz['show_answers']) ? 1 : 0;
+}
+
 function renderResultsSummaryCard($results) {
     $passed = !empty($results['passed']);
     $html = '<div class="results-card">';
@@ -250,7 +257,8 @@ function loadQuizMapping($filename) {
                     "filename" => $data[1],
                     "questions_count" => $questionsCount,
                     "passing_score" => (int)$data[3],
-                    "duration_minutes" => $durationMinutes
+                    "duration_minutes" => $durationMinutes,
+                    "show_answers" => quizSettingShowsAnswers(['show_answers' => $data[5] ?? ''])
                 ];
                 writeLog('DEBUG', "Loaded quiz from line $lineNum: Title='{$data[0]}', File='{$data[1]}', Count={$questionsCount}, PassingScore={$data[3]}%, Duration={$durationMinutes}m");
             } else {
@@ -313,7 +321,7 @@ function autoDiscoverQuizzes($quizzesFolder, $mappingFile, $defaultCount) {
         $title = ucwords($title);
         
         writeLog('INFO', "Auto-adding quiz: $title (file: $filename)");
-        saveQuizMapping($mappingFile, $title, $filename, $defaultCount, 70, defaultDurationMinutes($defaultCount));
+        saveQuizMapping($mappingFile, $title, $filename, $defaultCount, 70, defaultDurationMinutes($defaultCount), 1);
         $newQuizzesAdded++;
     }
     
@@ -332,14 +340,15 @@ function writeAllQuizMappings($filename, $quizzes) {
         return false;
     }
     
-    fputcsv($handle, ["Quiz Title", "CSV Filename", "Questions to Load", "Passing Score (%)", "Duration (minutes)"]);
+    fputcsv($handle, ["Quiz Title", "CSV Filename", "Questions to Load", "Passing Score (%)", "Duration (minutes)", "Show Answers"]);
     foreach ($quizzes as $quiz) {
         fputcsv($handle, [
             $quiz['title'],
             $quiz['filename'],
             $quiz['questions_count'],
             $quiz['passing_score'],
-            $quiz['duration_minutes']
+            $quiz['duration_minutes'],
+            quizSettingShowsAnswers($quiz)
         ]);
     }
     fclose($handle);
@@ -348,12 +357,13 @@ function writeAllQuizMappings($filename, $quizzes) {
 }
 
 // Function to save quiz mapping (append)
-function saveQuizMapping($filename, $title, $csvFilename, $questionsCount, $passingScore = 70, $durationMinutes = null) {
+function saveQuizMapping($filename, $title, $csvFilename, $questionsCount, $passingScore = 70, $durationMinutes = null, $showAnswers = 1) {
     if ($durationMinutes === null || $durationMinutes <= 0) {
         $durationMinutes = defaultDurationMinutes($questionsCount);
     }
+    $showAnswers = !empty($showAnswers) ? 1 : 0;
     
-    writeLog('DEBUG', "Saving quiz mapping: Title='$title', File='$csvFilename', Count=$questionsCount, PassingScore=$passingScore%, Duration={$durationMinutes}m");
+    writeLog('DEBUG', "Saving quiz mapping: Title='$title', File='$csvFilename', Count=$questionsCount, PassingScore=$passingScore%, Duration={$durationMinutes}m, ShowAnswers=$showAnswers");
     
     $quizzes = loadQuizMapping($filename);
     $quizzes[] = [
@@ -361,7 +371,8 @@ function saveQuizMapping($filename, $title, $csvFilename, $questionsCount, $pass
         'filename' => $csvFilename,
         'questions_count' => (int)$questionsCount,
         'passing_score' => (int)$passingScore,
-        'duration_minutes' => (int)$durationMinutes
+        'duration_minutes' => (int)$durationMinutes,
+        'show_answers' => $showAnswers
     ];
     
     if (writeAllQuizMappings($filename, $quizzes)) {
@@ -520,8 +531,9 @@ if (isset($_POST['admin_action'])) {
                 $durationMinutes = isset($_POST['duration_minutes']) && $_POST['duration_minutes'] !== ''
                     ? (int)$_POST['duration_minutes']
                     : defaultDurationMinutes($questionsToLoad);
+                $showAnswers = !empty($_POST['show_answers']) ? 1 : 0;
                 
-                writeLog('DEBUG', "Upload details - Title: '$quizTitle', Questions: $questionsToLoad, PassingScore: $passingScore%, Duration: {$durationMinutes}m");
+                writeLog('DEBUG', "Upload details - Title: '$quizTitle', Questions: $questionsToLoad, PassingScore: $passingScore%, Duration: {$durationMinutes}m, ShowAnswers: $showAnswers");
                 
                 if (empty($quizTitle)) {
                     $upload_error = "Please enter a quiz title.";
@@ -547,7 +559,7 @@ if (isset($_POST['admin_action'])) {
                         writeLog('DEBUG', "Moving uploaded file to: $destination");
                         
                         if (move_uploaded_file($fileTmpPath, $destination)) {
-                            saveQuizMapping($QUIZ_MAPPING_FILE, $quizTitle, $newFilename, $questionsToLoad, $passingScore, $durationMinutes);
+                            saveQuizMapping($QUIZ_MAPPING_FILE, $quizTitle, $newFilename, $questionsToLoad, $passingScore, $durationMinutes, $showAnswers);
                             $upload_success = "Quiz '$quizTitle' uploaded successfully! Total duration: {$durationMinutes} minute(s).";
                             writeLog('INFO', "Quiz uploaded successfully: $newFilename");
                         } else {
@@ -572,6 +584,7 @@ if (isset($_POST['admin_action'])) {
             $questionsToLoad = (int)($_POST['questions_to_load'] ?? 0);
             $passingScore = (int)($_POST['passing_score'] ?? 0);
             $durationMinutes = (int)($_POST['duration_minutes'] ?? 0);
+            $showAnswers = !empty($_POST['show_answers']) ? 1 : 0;
             
             writeLog('INFO', "Admin updating quiz index $quizIndex");
             
@@ -592,10 +605,11 @@ if (isset($_POST['admin_action'])) {
                 $quizzes[$quizIndex]['questions_count'] = $questionsToLoad;
                 $quizzes[$quizIndex]['passing_score'] = $passingScore;
                 $quizzes[$quizIndex]['duration_minutes'] = $durationMinutes;
+                $quizzes[$quizIndex]['show_answers'] = $showAnswers;
                 
                 if (writeAllQuizMappings($QUIZ_MAPPING_FILE, $quizzes)) {
                     $upload_success = "Quiz '$quizTitle' parameters updated successfully.";
-                    writeLog('INFO', "Quiz updated: index=$quizIndex, title='$quizTitle', questions=$questionsToLoad, pass=$passingScore%, duration={$durationMinutes}m");
+                    writeLog('INFO', "Quiz updated: index=$quizIndex, title='$quizTitle', questions=$questionsToLoad, pass=$passingScore%, duration={$durationMinutes}m, show_answers=$showAnswers");
                 } else {
                     $upload_error = "Failed to save quiz parameters.";
                 }
@@ -850,6 +864,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
         $status = $passed ? "PASSED" : "FAILED";
         $userEmail = $_SESSION['user_email'] ?? '';
         $userName = $_SESSION['user_name'] ?? '';
+        $showAnswers = quizSettingShowsAnswers($selectedQuiz);
+        foreach (loadQuizMapping($QUIZ_MAPPING_FILE) as $mappedQuiz) {
+            if (($mappedQuiz['filename'] ?? '') === ($selectedQuiz['filename'] ?? '')) {
+                $showAnswers = quizSettingShowsAnswers($mappedQuiz);
+                break;
+            }
+        }
         
         $attempt = [
             'id' => uniqid('attempt_', true),
@@ -867,6 +888,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
             'time_spent_seconds' => $timeSpentSeconds,
             'time_spent' => formatTimeSpent($timeSpentSeconds),
             'timed_out' => !empty($timeExpired),
+            'show_answers' => $showAnswers,
             'leave_count' => (int)($_SESSION['leave_count'] ?? 0),
             'answers' => $normalizedAnswers,
             'questions' => $questions
@@ -2252,6 +2274,16 @@ $quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
                         </div>
 
                         <div class="form-group">
+                            <label for="show_answers" style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                                <input type="checkbox" id="show_answers" name="show_answers" value="1" checked style="width: auto;">
+                                แสดงเฉลยหลังสอบเสร็จ
+                            </label>
+                            <small style="color: #666; display: block; margin-top: 5px;">
+                                ปิดไว้ ผู้สอบจะเห็นเฉพาะผ่าน/ไม่ผ่าน คะแนน และเวลาที่ใช้
+                            </small>
+                        </div>
+
+                        <div class="form-group">
                             <label for="csv_file">Select CSV File</label>
                             <input type="file" id="csv_file" name="csv_file" accept=".csv" required>
                         </div>
@@ -2260,7 +2292,7 @@ $quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
                     </form>
 
                     <h2 style="margin-top: 40px;">Available Quizzes (<?php echo count($availableQuizzes); ?> total)</h2>
-                    <p style="color: #666; margin-bottom: 10px;">Edit quiz parameters below and click Save for that row.</p>
+                    <p style="color: #666; margin-bottom: 10px;">Edit quiz parameters below and click Save for that row. ติ๊ก “แสดงเฉลย” เพื่อให้ผู้สอบเห็นเฉลยหลังทำเสร็จ ถ้าปิดไว้จะเห็นเฉพาะผ่าน/ไม่ผ่าน คะแนน และเวลาที่ใช้</p>
                     
                     <?php if (count($availableQuizzes) > 0): ?>
                         <div class="admin-table-wrap">
@@ -2273,6 +2305,7 @@ $quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
                                     <th>Questions</th>
                                     <th>Passing %</th>
                                     <th>Duration (min)</th>
+                                    <th>แสดงเฉลย</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
@@ -2293,6 +2326,12 @@ $quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
                                         </td>
                                         <td>
                                             <input form="<?php echo $formId; ?>" type="number" name="duration_minutes" id="edit_duration_<?php echo $index; ?>" value="<?php echo (int)$quiz['duration_minutes']; ?>" min="1" required style="width: 70px; padding: 8px; border: 1px solid #ddd; border-radius: 6px;">
+                                        </td>
+                                        <td>
+                                            <label style="display: flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 0.9em;">
+                                                <input form="<?php echo $formId; ?>" type="checkbox" name="show_answers" value="1" <?php echo !empty($quiz['show_answers']) ? 'checked' : ''; ?> style="width: auto;">
+                                                แสดง
+                                            </label>
                                         </td>
                                         <td style="white-space: nowrap;">
                                             <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
@@ -2439,10 +2478,15 @@ $quizAttempts = ($showAdminPanel && $adminLoggedIn) ? loadQuizAttempts() : [];
             $reviewQuestions = $results['questions'] ?? $questions;
             $reviewAnswers = $results['answers'] ?? ($_SESSION['quiz_answers'] ?? []);
             echo renderResultsSummaryCard($results);
+            $showAnswerKey = !array_key_exists('show_answers', $results) || !empty($results['show_answers']);
             ?>
+            <?php if ($showAnswerKey): ?>
             <h2 style="margin: 30px 0 10px;">Full Answer Key</h2>
             <p style="color:#666; margin-bottom: 10px;">Green = correct answer · Blue = your correct choice · Red = your incorrect choice</p>
             <?php echo renderAnswerReview($reviewQuestions, $reviewAnswers); ?>
+            <?php else: ?>
+            <p style="color:#666; margin: 24px 0 10px; text-align: center;">ไม่แสดงเฉลยสำหรับข้อสอบนี้</p>
+            <?php endif; ?>
 
             <div style="display: flex; gap: 15px; margin-top: 30px;">
                 <a href="?select_another=1" style="text-decoration: none; flex: 1;">
